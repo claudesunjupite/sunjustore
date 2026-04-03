@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>🔧 ระบบเบิกจ่ายอะไหล่ v8</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -136,8 +136,8 @@ input[type="number"]{-moz-appearance:textfield}
 .photo-thumb{width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb;cursor:pointer}
 .photo-add{width:80px;height:80px;border:2px dashed #d1d5db;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#9ca3af;font-size:28px;background:#f9fafb;flex-shrink:0}
 .photo-add:hover{border-color:#3b82f6;color:#3b82f6;background:#eff6ff}
-.sfw{position:relative;display:inline-block}
-.sfw-btn{display:flex;align-items:center;gap:6px;justify-content:space-between;cursor:pointer;min-width:130px;text-align:left}
+.sfw{position:relative;display:block;width:100%}
+.sfw-btn{display:flex;align-items:center;gap:6px;justify-content:space-between;cursor:pointer;width:100%;text-align:left}
 .sfw-drop{position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:300;min-width:160px;overflow:hidden}
 .sfw-opt{padding:10px 14px;cursor:pointer;font-size:13px;white-space:nowrap;border-bottom:1px solid #f3f4f6}
 .sfw-opt:last-child{border-bottom:none}
@@ -279,7 +279,7 @@ const S = {
   expandedCustomer:null,
   _custMachErr:null,
   _editCustMachId:null,
-  _jCustSel:'',
+  _jCustSel:'',_jCustOpen:false,
 };
 function setState(p){Object.assign(S,p);if(DB_KEYS.some(k=>k in p))saveDB();render();}
 
@@ -1167,10 +1167,16 @@ function renderJobs(){
           <div><label class="field-label">รายละเอียดงาน</label>
             <input class="input" id="j-desc" placeholder="รายละเอียด" value="${esc(S._jDesc||'')}"></div>
           <div><label class="field-label">ลูกค้า</label>
-            <select class="input" id="j-cust" data-action="job-cust-change">
-              <option value="">— เลือกลูกค้า —</option>
-              ${S.customers.map(c=>`<option value="${c.id}"${S._jCustSel===c.id?' selected':''}>${esc(c.name)}</option>`).join('')}
-            </select></div>
+            ${(()=>{
+              const curCust=S.customers.find(c=>c.id===S._jCustSel);
+              const label=curCust?esc(curCust.name):'— เลือกลูกค้า —';
+              const drop=S._jCustOpen?`<div class="sfw-drop" style="z-index:200">
+                <div class="sfw-opt${!S._jCustSel?' active':''}" data-action="pick-jcust" data-val="">— เลือกลูกค้า —</div>
+                ${S.customers.map(c=>`<div class="sfw-opt${S._jCustSel===c.id?' active':''}" data-action="pick-jcust" data-val="${c.id}">${esc(c.name)}</div>`).join('')}
+              </div>`:'';
+              return `<div class="sfw"><button type="button" class="input sfw-btn" data-action="toggle-jcust">${label} <span>▾</span></button>${drop}</div>`;
+            })()}
+          </div>
           ${(()=>{
             const selCust=S.customers.find(c=>c.id===S._jCustSel);
             const machs=selCust?.machines||[];
@@ -2265,9 +2271,13 @@ document.addEventListener('click', e => {
     S._lineDropOpen='';
     requestAnimationFrame(()=>render());
   }
-  // ปิด stock-filter dropdown เมื่อคลิกนอก
+  // ปิด dropdown เมื่อคลิกนอก
   if(S._stockStatusOpen && !e.target.closest('.sfw')){
     S._stockStatusOpen=false;
+    requestAnimationFrame(()=>render());
+  }
+  if(S._jCustOpen && !e.target.closest('.sfw')){
+    S._jCustOpen=false;
     requestAnimationFrame(()=>render());
   }
   const el = e.target.closest('[data-action]');
@@ -2318,6 +2328,8 @@ document.addEventListener('click', e => {
 
   // Job form customer change
   if(act==='job-cust-change'){ setState({_jCustSel:el.value,_jMachId:''}); return; }
+  if(act==='toggle-jcust'){ setState({_jCustOpen:!S._jCustOpen}); return; }
+  if(act==='pick-jcust'){ setState({_jCustSel:el.dataset.val||'',_jCustOpen:false,_jMachId:''}); return; }
 
   // Admin stock
   if(act==='add-part')        { doAddPart(); return; }
@@ -2469,6 +2481,11 @@ document.addEventListener('touchstart', e => {
   const sf = e.target.closest('[data-action="set-stock-filter"]');
   if(sf){ e.preventDefault();
     setState({filterStockStatus:sf.dataset.val,stockPage:0,adminStockPage:0,_stockStatusOpen:false}); return;
+  }
+  // job customer option
+  const jc = e.target.closest('[data-action="pick-jcust"]');
+  if(jc){ e.preventDefault();
+    setState({_jCustSel:jc.dataset.val||'',_jCustOpen:false,_jMachId:''}); return;
   }
 }, {passive:false});
 
@@ -2725,7 +2742,7 @@ function doDelCustomerMachine(custId,machId){
 function doOpenJob(){
   const code  =(document.getElementById('j-code') ?.value||'').trim();
   const desc  =(document.getElementById('j-desc') ?.value||'').trim();
-  const custId= document.getElementById('j-cust') ?.value||'';
+  const custId= S._jCustSel||'';
   if(!desc){ setState({_jobErr:'กรุณาระบุรายละเอียดงาน'}); return; }
   // machine: from customer dropdown or free-text
   let machId='', mtype='';
@@ -2742,8 +2759,7 @@ function doOpenJob(){
   const job={id,code:id,desc,machineId:machId,customerId:custId,machineType:mtype,status:'open',createdAt:nowISO(),closedAt:null};
   setState({jobs:[...S.jobs,job],_jobErr:null,_jCustSel:'',_jMachId:'',_jCode:'',_jDesc:''});
   // clear form fields
-  ['j-code','j-desc','j-machid'].forEach(fid=>{const el=document.getElementById(fid);if(el)el.value='';});
-  const sc=document.getElementById('j-cust');if(sc)sc.value='';
+  ['j-code','j-desc','j-machid'].forEach(fid=>{const el=document.getElementById(fid);if(el)el.value='';})
 }
 
 function doEditJob(id){
