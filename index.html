@@ -22,7 +22,7 @@ table{border-collapse:collapse;width:100%}
 .alert-blue{background:#eff6ff;border-color:#bfdbfe;color:#1e40af}
 .alert-orange{background:#fff7ed;border-color:#fdba74;color:#9a3412}
 .alert-red{background:#fef2f2;border-color:#fca5a5;color:#991b1b}
-.nav{background:#fff;border-bottom:1px solid #e5e7eb;padding:0 16px;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.nav{background:#fff;border-bottom:1px solid #e5e7eb;padding:0 16px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x}
 .nav::-webkit-scrollbar{display:none}
 .nav-inner{display:inline-flex;gap:4px;padding:8px 0}
 .nav-btn{position:relative;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;border:none;background:none;color:#6b7280;white-space:nowrap}
@@ -46,6 +46,8 @@ table{border-collapse:collapse;width:100%}
 .input-sm{padding:6px 8px;font-size:12px}
 .input-mono{font-family:monospace}
 .input-readonly{background:#f9fafb;color:#6b7280}
+input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+input[type="number"]{-moz-appearance:textfield}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .grid-4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
@@ -130,6 +132,13 @@ table{border-collapse:collapse;width:100%}
 .part-option .po-name{font-size:13px;flex:1}
 .part-option .po-stock{font-size:11px;color:#6b7280;white-space:nowrap}
 .part-option .po-warn{color:#dc2626;font-weight:700}
+.sfw{position:relative;display:inline-block}
+.sfw-btn{display:flex;align-items:center;gap:6px;justify-content:space-between;cursor:pointer;min-width:130px;text-align:left}
+.sfw-drop{position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:300;min-width:160px;overflow:hidden}
+.sfw-opt{padding:10px 14px;cursor:pointer;font-size:13px;white-space:nowrap;border-bottom:1px solid #f3f4f6}
+.sfw-opt:last-child{border-bottom:none}
+.sfw-opt:hover,.sfw-opt.active{background:#eff6ff}
+.sfw-opt.active{font-weight:700;color:#2563eb}
 .part-selected-tag{display:inline-flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:5px 10px;font-size:12px}
 .part-selected-tag .pt-code{font-family:monospace;color:#1d4ed8;font-weight:700}
 .part-selected-tag .pt-name{color:#374151}
@@ -255,6 +264,7 @@ const S = {
   storeHistFt:'all',storeHistDate:'',storeHistFrom:'',storeHistTo:'',storeHistJob:'all',storeHistQ:'',
   _lineSearch:{},   // lineId -> search text while typing
   _lineDropOpen:'', // lineId of open dropdown
+  _stockStatusOpen:false, // custom stock filter dropdown
   stockPage:0, adminStockPage:0, // pagination
   companyName:'บริษัท ABC จำกัด',
   _loginRole:'user',_loginErr:null,_loginAdminName:'',
@@ -268,6 +278,66 @@ const S = {
   _jCustSel:'',
 };
 function setState(p){Object.assign(S,p);if(DB_KEYS.some(k=>k in p))saveDB();render();}
+
+function seedParts(){
+  const demo=[
+    {code:'OIL-001',name:'น้ำมันเครื่อง 10W-30',unit:'ลิตร',stock:120,minStock:20},
+    {code:'OIL-002',name:'น้ำมันเครื่อง 15W-40',unit:'ลิตร',stock:80,minStock:20},
+    {code:'OIL-003',name:'น้ำมันเกียร์ ATF',unit:'ลิตร',stock:50,minStock:10},
+    {code:'OIL-004',name:'น้ำมันเบรก DOT3',unit:'ลิตร',stock:30,minStock:5},
+    {code:'FLT-001',name:'ไส้กรองน้ำมันเครื่อง',unit:'ชิ้น',stock:45,minStock:10},
+    {code:'FLT-002',name:'ไส้กรองอากาศ',unit:'ชิ้น',stock:38,minStock:10},
+    {code:'FLT-003',name:'ไส้กรองเชื้อเพลิง',unit:'ชิ้น',stock:22,minStock:5},
+    {code:'FLT-004',name:'ไส้กรองแอร์เคบิน',unit:'ชิ้น',stock:18,minStock:5},
+    {code:'BRK-001',name:'ผ้าเบรกหน้า (ชุด)',unit:'ชุด',stock:25,minStock:8},
+    {code:'BRK-002',name:'ผ้าเบรกหลัง (ชุด)',unit:'ชุด',stock:20,minStock:8},
+    {code:'BRK-003',name:'จานเบรกหน้า',unit:'ชิ้น',stock:14,minStock:4},
+    {code:'BRK-004',name:'จานเบรกหลัง',unit:'ชิ้น',stock:10,minStock:4},
+    {code:'BRK-005',name:'ดรัมเบรก',unit:'ชิ้น',stock:8,minStock:2},
+    {code:'SPK-001',name:'หัวเทียน NGK BKR6E',unit:'หัว',stock:60,minStock:16},
+    {code:'SPK-002',name:'หัวเทียนอิริเดียม',unit:'หัว',stock:32,minStock:8},
+    {code:'BAT-001',name:'แบตเตอรี่ 55Ah',unit:'ลูก',stock:12,minStock:3},
+    {code:'BAT-002',name:'แบตเตอรี่ 75Ah',unit:'ลูก',stock:8,minStock:3},
+    {code:'BLT-001',name:'สายพานหน้าเครื่อง',unit:'เส้น',stock:20,minStock:5},
+    {code:'BLT-002',name:'สายพานไทม์มิ่ง',unit:'เส้น',stock:15,minStock:5},
+    {code:'BLT-003',name:'สายพานแอร์',unit:'เส้น',stock:18,minStock:5},
+    {code:'SHK-001',name:'โช๊คอัพหน้าซ้าย',unit:'ชิ้น',stock:10,minStock:2},
+    {code:'SHK-002',name:'โช๊คอัพหน้าขวา',unit:'ชิ้น',stock:10,minStock:2},
+    {code:'SHK-003',name:'โช๊คอัพหลังซ้าย',unit:'ชิ้น',stock:8,minStock:2},
+    {code:'SHK-004',name:'โช๊คอัพหลังขวา',unit:'ชิ้น',stock:8,minStock:2},
+    {code:'TYR-001',name:'ยางใน 185/65R15',unit:'เส้น',stock:16,minStock:4},
+    {code:'TYR-002',name:'ยางนอก 195/60R15',unit:'เส้น',stock:12,minStock:4},
+    {code:'LMP-001',name:'หลอดไฟหน้า H4',unit:'หลอด',stock:24,minStock:8},
+    {code:'LMP-002',name:'หลอดไฟท้าย LED',unit:'หลอด',stock:30,minStock:8},
+    {code:'LMP-003',name:'หลอดไฟเลี้ยว',unit:'หลอด',stock:40,minStock:10},
+    {code:'CLT-001',name:'คลัตช์ชุด (จาน+แผ่น)',unit:'ชุด',stock:6,minStock:2},
+    {code:'CLT-002',name:'แผ่นกดคลัตช์',unit:'ชิ้น',stock:8,minStock:2},
+    {code:'RAD-001',name:'หม้อน้ำ',unit:'ชิ้น',stock:5,minStock:2},
+    {code:'RAD-002',name:'ฝาหม้อน้ำ',unit:'ชิ้น',stock:15,minStock:5},
+    {code:'RAD-003',name:'พัดลมหม้อน้ำ',unit:'ชิ้น',stock:7,minStock:2},
+    {code:'STE-001',name:'ปั๊มพวงมาลัย',unit:'ชิ้น',stock:4,minStock:1},
+    {code:'STE-002',name:'น้ำมันพวงมาลัย',unit:'ลิตร',stock:20,minStock:5},
+    {code:'ALT-001',name:'ไดชาร์จ',unit:'ชิ้น',stock:5,minStock:1},
+    {code:'ALT-002',name:'ไดสตาร์ท',unit:'ชิ้น',stock:4,minStock:1},
+    {code:'ENG-001',name:'ปะเก็นฝาสูบ',unit:'ชุด',stock:6,minStock:2},
+    {code:'ENG-002',name:'แหวนลูกสูบ',unit:'ชุด',stock:8,minStock:2},
+    {code:'ENG-003',name:'วาล์วไอดี',unit:'ชิ้น',stock:20,minStock:8},
+    {code:'ENG-004',name:'วาล์วไอเสีย',unit:'ชิ้น',stock:20,minStock:8},
+    {code:'GBX-001',name:'ลูกปืนเกียร์',unit:'ชุด',stock:10,minStock:3},
+    {code:'GBX-002',name:'ซีลเกียร์',unit:'ชุด',stock:12,minStock:4},
+    {code:'WSH-001',name:'ปัดน้ำฝนหน้า (คู่)',unit:'คู่',stock:18,minStock:6},
+    {code:'WSH-002',name:'ปัดน้ำฝนหลัง',unit:'ชิ้น',stock:14,minStock:4},
+    {code:'WSH-003',name:'น้ำยาล้างกระจก',unit:'ลิตร',stock:35,minStock:10},
+    {code:'EXH-001',name:'ท่อไอเสีย',unit:'ท่อน',stock:6,minStock:2},
+    {code:'EXH-002',name:'ปะเก็นท่อไอเสีย',unit:'ชิ้น',stock:10,minStock:3},
+    {code:'MSC-001',name:'เทปพันสายไฟ',unit:'ม้วน',stock:50,minStock:10},
+  ];
+  const existing=new Set(S.parts.map(p=>p.code));
+  const toAdd=demo.filter(d=>!existing.has(d.code)).map(d=>({...d,id:Date.now()+Math.random()}));
+  if(!toAdd.length){alert('มีสินค้าทั้งหมดอยู่แล้ว');return;}
+  setState({parts:[...S.parts,...toAdd],_stockOk:`✅ เพิ่มสินค้าทดสอบ ${toAdd.length} รายการแล้ว`});
+  alert(`เพิ่มสินค้าสำเร็จ ${toAdd.length} รายการ`);
+}
 
 function badge(t,c){return `<span class="badge ${c||'bg-gray'}">${esc(t)}</span>`;}
 function statusBadge(st){const s=STATUS[st]||{label:st,cls:'bg-gray',icon:''};return badge(`${s.icon} ${s.label}`,s.cls);}
@@ -625,10 +695,25 @@ function renderAdminStock(){
   </div>`;
 
   if(t==='list')   return `<div class="section">${tabBar}${renderAdminStockList()}</div>`;
+
   if(t==='add')    return `<div class="section">${tabBar}${renderAdminStockAdd()}</div>`;
   if(t==='adjust') return `<div class="section">${tabBar}${renderAdminStockAdjust()}</div>`;
   if(t==='log')    return `<div class="section">${tabBar}${renderAdminStockLog()}</div>`;
   return '';
+}
+
+function renderStockFilter(){
+  const opts=[
+    {v:'all',l:'ทั้งหมด'},
+    {v:'low',l:'⚠️ ต่ำกว่าขั้นต่ำ'},
+    {v:'out',l:'❌ หมด'},
+    {v:'ok',l:'✅ ปกติ'},
+  ];
+  const cur=opts.find(o=>o.v===S.filterStockStatus)||opts[0];
+  const drop=S._stockStatusOpen?`<div class="sfw-drop">${
+    opts.map(o=>`<div class="sfw-opt${o.v===S.filterStockStatus?' active':''}" data-action="set-stock-filter" data-val="${o.v}">${o.l}</div>`).join('')
+  }</div>`:'';
+  return `<div class="sfw"><button class="input input-sm sfw-btn" data-action="toggle-stock-filter">${cur.l} <span>▾</span></button>${drop}</div>`;
 }
 
 function renderAdminStockList(){
@@ -674,12 +759,7 @@ function renderAdminStockList(){
       <span class="card-hdr-title">📦 รายการสินค้าในสต็อก (${S.parts.length} รายการ)</span>
       <div class="row gap-1">
         <input class="input input-sm" id="stock-search" placeholder="🔍 ค้นหา..." style="width:160px" value="${esc(S.searchStock||'')}">
-        <select class="input input-sm" data-action="filter-stock-status">
-          <option value="all"${S.filterStockStatus==='all'?' selected':''}>ทั้งหมด</option>
-          <option value="low"${S.filterStockStatus==='low'?' selected':''}>⚠️ ต่ำกว่าขั้นต่ำ</option>
-          <option value="out"${S.filterStockStatus==='out'?' selected':''}>❌ หมด</option>
-          <option value="ok"${S.filterStockStatus==='ok'?' selected':''}>✅ ปกติ</option>
-        </select>
+        ${renderStockFilter()}
       </div>
     </div>
     <div style="overflow-x:auto">
@@ -817,12 +897,7 @@ function renderStoreStock(){
         <span class="card-hdr-title">📦 สต็อกทั้งหมด (${S.parts.length} รายการ)</span>
         <div class="row gap-1">
           <input class="input input-sm" id="stock-search" placeholder="🔍 ค้นหา..." style="width:150px" value="${esc(S.searchStock||'')}">
-          <select class="input input-sm" data-action="filter-stock-status">
-            <option value="all"${S.filterStockStatus==='all'?' selected':''}>ทั้งหมด</option>
-            <option value="low"${S.filterStockStatus==='low'?' selected':''}>⚠️ ต่ำกว่าขั้นต่ำ</option>
-            <option value="out"${S.filterStockStatus==='out'?' selected':''}>❌ หมด</option>
-            <option value="ok"${S.filterStockStatus==='ok'?' selected':''}>✅ ปกติ</option>
-          </select>
+          ${renderStockFilter()}
         </div>
       </div>
       <div style="overflow-x:auto"><table class="tbl">
@@ -1105,7 +1180,7 @@ function renderCreate(){
         <div><label class="field-label">หน่วย</label>
           <input class="input input-sm input-readonly" readonly value="${part?esc(part.unit):'—'}"></div>
         <div><label class="field-label">จำนวน *</label>
-          <input class="input input-sm" type="number" min="1" value="${l.qty}" data-action="line-qty" data-lid="${l.id}"></div>
+          <input class="input input-sm" type="text" inputmode="decimal" value="${l.qty}" data-action="line-qty" data-lid="${l.id}"></div>
         <div><label class="field-label">ตำแหน่ง / Component *</label>
           <select class="input input-sm" data-action="line-loc" data-lid="${l.id}">
             ${S.locations.map((loc,li)=>`<option${(l.location?l.location===loc:li===0)?' selected':''}>${esc(loc)}</option>`).join('')}
@@ -2005,9 +2080,39 @@ function renderPage(){
 
 function render(){
   const app=document.getElementById('app');if(!app) return;
+
+  // บันทึก focus ก่อน re-render
+  const focused=document.activeElement;
+  let fi=null;
+  if(focused && app.contains(focused)){
+    fi={
+      id:focused.id||'',
+      action:focused.dataset.action||'',
+      lid:focused.dataset.lid||'',
+      ss:focused.selectionStart,
+      se:focused.selectionEnd
+    };
+  }
+
   if(!S.user){app.innerHTML=renderLogin()+renderModal();return;}
   app.innerHTML=renderTopbar()+renderAlerts()+renderNav()+renderSummaryCards()
     +`<div class="page-wrap">${renderPage()}</div>`+renderModal();
+
+  // คืน focus หลัง re-render
+  if(fi){
+    let el=null;
+    if(fi.id) el=document.getElementById(fi.id);
+    if(!el && fi.action && fi.lid)
+      el=document.querySelector(`[data-action="${fi.action}"][data-lid="${fi.lid}"]`);
+    if(el){
+      el.focus();
+      if(fi.ss!=null) try{ el.setSelectionRange(fi.ss,fi.se); }catch(_){}
+    }
+  }
+
+  // เลื่อน nav ให้ tab ที่ active อยู่ในหน้าจอ
+  const activeBtn=document.querySelector('.nav-btn.active');
+  if(activeBtn) activeBtn.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 
 // ─── ADMIN: COMPANY SETTINGS ──────────────────────────────────────────────────
@@ -2026,9 +2131,15 @@ function renderCompanyPage(){
 
 // ─── EVENT DELEGATION ─────────────────────────────────────────────────────────
 document.addEventListener('click', e => {
-  // Close part dropdown if clicking outside any part-search-wrap
+  // ปิด part-search dropdown เมื่อคลิกนอก
   if(S._lineDropOpen && !e.target.closest('.part-search-wrap')){
-    setState({_lineDropOpen:''});
+    S._lineDropOpen='';
+    requestAnimationFrame(()=>render());
+  }
+  // ปิด stock-filter dropdown เมื่อคลิกนอก
+  if(S._stockStatusOpen && !e.target.closest('.sfw')){
+    S._stockStatusOpen=false;
+    requestAnimationFrame(()=>render());
   }
   const el = e.target.closest('[data-action]');
   if(!el) return;
@@ -2157,6 +2268,8 @@ document.addEventListener('click', e => {
   if(act==='filter-status'){ setState({filterStatus:val}); return; }
   if(act==='filter-job')   { setState({filterJob:val}); return; }
   if(act==='filter-stock-status'){ setState({filterStockStatus:val,stockPage:0,adminStockPage:0}); return; }
+  if(act==='toggle-stock-filter'){ setState({_stockStatusOpen:!S._stockStatusOpen}); return; }
+  if(act==='set-stock-filter')   { setState({filterStockStatus:val,stockPage:0,adminStockPage:0,_stockStatusOpen:false}); return; }
   if(act==='my-job-filter'){ setState({myJobFilter:val}); return; }
 
   // Store history
@@ -2199,10 +2312,28 @@ document.addEventListener('input', e => {
     return;
   }
   if(act==='line-qty'&&lid){
-    const lines=S.createLines.map(l=>String(l.id)===lid?{...l,qty:Math.max(1,parseInt(el.value)||1)}:l);
-    setState({createLines:lines});
+    // อัปเดต state โดยไม่ re-render เพื่อให้พิมพ์ได้ต่อเนื่อง
+    S.createLines=S.createLines.map(l=>String(l.id)===lid?{...l,qty:el.value}:l);
+    return;
   }
 });
+
+// มือถือ: ดัก touchstart เพื่อเลือกก่อน event อื่นจะปิด dropdown
+document.addEventListener('touchstart', e => {
+  // part-option
+  const po = e.target.closest('[data-action="select-part"]');
+  if(po){ e.preventDefault();
+    const pid=Number(po.dataset.pid)||po.dataset.pid, lid=po.dataset.lid;
+    const lines=S.createLines.map(l=>String(l.id)===String(lid)?{...l,partId:pid}:l);
+    const ls={...S._lineSearch}; delete ls[lid];
+    setState({createLines:lines,_lineSearch:ls,_lineDropOpen:''}); return;
+  }
+  // stock-filter option
+  const sf = e.target.closest('[data-action="set-stock-filter"]');
+  if(sf){ e.preventDefault();
+    setState({filterStockStatus:sf.dataset.val,stockPage:0,adminStockPage:0,_stockStatusOpen:false}); return;
+  }
+}, {passive:false});
 
 document.addEventListener('change', e => {
   const el = e.target;
@@ -2217,7 +2348,7 @@ document.addEventListener('change', e => {
   }
   // line-qty: update qty
   if(act==='line-qty'&&lid){
-    const lines=S.createLines.map(l=>String(l.id)===lid?{...l,qty:Math.max(1,parseInt(el.value)||1)}:l);
+    const lines=S.createLines.map(l=>String(l.id)===lid?{...l,qty:Math.max(0,parseFloat(el.value)||0)}:l);
     setState({createLines:lines}); return;
   }
   // line-loc: update location
