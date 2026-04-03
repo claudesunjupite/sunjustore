@@ -2660,17 +2660,16 @@ function doAddPart(){
 }
 
 function doSaveEditPart(id){
-  const pId=Number(id);
-  const code =(document.getElementById(`ep-code-${pId}`)?.value||'').trim();
-  const name =(document.getElementById(`ep-name-${pId}`)?.value||'').trim();
-  const unit =(document.getElementById(`ep-unit-${pId}`)?.value||'').trim();
-  const minS = parseInt(document.getElementById(`ep-min-${pId}`)?.value||'10',10);
+  const code =(document.getElementById(`ep-code-${id}`)?.value||'').trim();
+  const name =(document.getElementById(`ep-name-${id}`)?.value||'').trim();
+  const unit =(document.getElementById(`ep-unit-${id}`)?.value||'').trim();
+  const minS = parseInt(document.getElementById(`ep-min-${id}`)?.value||'10',10);
   if(!code||!name||!unit){ alert('กรุณากรอกข้อมูลให้ครบ'); return; }
-  if(S.parts.some(p=>p.code===code&&p.id!==pId)){ alert('รหัสสินค้าซ้ำ'); return; }
-  const oldPart=S.parts.find(p=>p.id===pId);
+  if(S.parts.some(p=>p.code===code&&String(p.id)!==String(id))){ alert('รหัสสินค้าซ้ำ'); return; }
+  const oldPart=S.parts.find(p=>String(p.id)===String(id));
   if(!confirm(`ยืนยันการแก้ไข "${oldPart?.name}" ?\nรหัส: ${oldPart?.code} → ${code}\nชื่อ: ${oldPart?.name} → ${name}\nหน่วย: ${oldPart?.unit} → ${unit}`)) return;
-  const log={id:genId('LOG'),partId:pId,partCode:code,partName:name,prevStock:oldPart?.stock||0,newStock:oldPart?.stock||0,delta:0,type:'edit',note:`แก้ไขข้อมูล: [${oldPart?.code}]${oldPart?.name} → [${code}]${name} หน่วย:${unit}`,by:S.user.name,at:nowISO()};
-  const parts=S.parts.map(p=>p.id===pId?{...p,code,name,unit,minStock:isNaN(minS)?10:minS}:p);
+  const log={id:genId('LOG'),partId:id,partCode:code,partName:name,prevStock:oldPart?.stock||0,newStock:oldPart?.stock||0,delta:0,type:'edit',note:`แก้ไขข้อมูล: [${oldPart?.code}]${oldPart?.name} → [${code}]${name} หน่วย:${unit}`,by:S.user.name,at:nowISO()};
+  const parts=S.parts.map(p=>String(p.id)===String(id)?{...p,code,name,unit,minStock:isNaN(minS)?10:minS}:p);
   setState({parts,stockLog:[...S.stockLog,log],_editPartId:null,_stockOk:`✅ บันทึกแก้ไข "${name}" แล้ว`,adminStockTab:'log'});
 }
 
