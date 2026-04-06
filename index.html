@@ -273,7 +273,7 @@ const S = {
   companyName:'บริษัท ABC จำกัด',
   _loginRole:'user',_loginErr:null,_loginAdminName:'',
   _userErr:null,_jobErr:null,_createErr:null,_createOk:null,
-  _stockErr:null,_stockOk:null,_adjErr:null,_adjOk:null,_issuePhotoErr:null,
+  _stockErr:null,_stockOk:null,_adjErr:null,_adjOk:null,_issuePhotoErr:null,storeStockTab:'stock',
   _custErr:null,_locErr:null,_machErr:null,
   _editPartId:null,
   expandedCustomer:null,
@@ -417,6 +417,10 @@ function seedParts(){
 }
 
 function badge(t,c){return `<span class="badge ${c||'bg-gray'}">${esc(t)}</span>`;}
+function sortByCode(a,b){
+  const p=c=>{const m=c.match(/^([A-Z])-(\d+)$/);if(!m)return[9,0];const o={A:0,E:1,M:2};return[(o[m[1]]??9),parseInt(m[2])];};
+  const[ao,an]=p(a.code||'');const[bo,bn]=p(b.code||'');return ao!==bo?ao-bo:an-bn;
+}
 function statusBadge(st){const s=STATUS[st]||{label:st,cls:'bg-gray',icon:''};return badge(`${s.icon} ${s.label}`,s.cls);}
 function stockBadge(n,min){const w=min||STOCK_WARN_LEVEL;if(n===0)return`<span class="stock-badge-warn">หมดสต็อก</span>`;if(n<w)return`<span class="stock-badge-warn">⚠️ ${n}</span>`;return`<span class="stock-badge-ok">${n}</span>`;}
 function downloadXLS(filename,htmlTable){
@@ -634,6 +638,11 @@ function renderDangerPage(){
         <div style="font-size:13px;color:#6b7280;margin-bottom:8px">จะ<b>เพิ่มสินค้าทับ</b>รายการที่มีอยู่ (ถ้ารหัสซ้ำจะข้ามไป)</div>
         ${imported?`<div class="ok" style="margin-bottom:8px">✅ นำเข้าสำเร็จแล้ว</div>`:''}
         <button class="btn btn-primary" data-action="import-seed-parts">📥 นำเข้าสินค้า 3,399 รายการ</button>
+      </div>
+      <div>
+        <div style="font-weight:600;margin-bottom:4px">📊 อัพเดตสต็อกจาก StockCard_Log_Short (82 รายการ)</div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:8px">อัพเดตเฉพาะ<b>จำนวนคงเหลือ</b>ของ 82 รายการที่มีในไฟล์ Excel — สินค้าอื่นไม่ถูกแตะ</div>
+        <button class="btn btn-orange" data-action="apply-stock-patch">📊 อัพเดตสต็อก 82 รายการ</button>
       </div>
       <hr style="border-color:#fca5a5">
       <div>
@@ -984,6 +993,7 @@ function renderAdminStockList(){
   if(S.filterStockStatus==='low') all=all.filter(p=>p.stock<(p.minStock||STOCK_WARN_LEVEL)&&p.stock>0);
   if(S.filterStockStatus==='out') all=all.filter(p=>p.stock===0);
   if(S.filterStockStatus==='ok')  all=all.filter(p=>p.stock>=(p.minStock||STOCK_WARN_LEVEL));
+  all.sort(sortByCode);
   const editId=S._editPartId;
   // Keep edit row always visible even if on a different page
   const page=editId?0:Math.min(S.adminStockPage||0,Math.max(0,Math.ceil(all.length/PAGE_SIZE)-1));
@@ -1121,54 +1131,68 @@ function renderAdminStockLog(){
 
 // ─── STORE: STOCK VIEW ────────────────────────────────────────────────────────
 function renderStoreStock(){
-  const q=(S.searchStock||'').toLowerCase();
-  let all=S.parts.filter(p=>!q||p.name.toLowerCase().includes(q)||p.code.toLowerCase().includes(q));
-  if(S.filterStockStatus==='low') all=all.filter(p=>p.stock<(p.minStock||STOCK_WARN_LEVEL)&&p.stock>0);
-  if(S.filterStockStatus==='out') all=all.filter(p=>p.stock===0);
-  if(S.filterStockStatus==='ok')  all=all.filter(p=>p.stock>=(p.minStock||STOCK_WARN_LEVEL));
+  const t=S.storeStockTab||'stock';
   const lowItems=S.parts.filter(p=>p.stock<(p.minStock||STOCK_WARN_LEVEL));
-  const page=Math.min(S.stockPage||0,Math.max(0,Math.ceil(all.length/PAGE_SIZE)-1));
-  const list=all.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
-  const rows=list.map(p=>{
-    const w=p.minStock||STOCK_WARN_LEVEL;
-    return `<tr class="${p.stock<w?'stock-crit':''}">
-      <td class="font-mono" style="font-size:11px">${esc(p.code)}</td>
-      <td>${esc(p.name)}</td><td>${esc(p.unit)}</td>
-      <td class="right">${w}</td>
-      <td class="right">${p.stock}</td>
-      <td>${stockBadge(p.stock,w)}</td>
-    </tr>`;
-  }).join('');
-  return `<div class="section">
-    ${lowItems.length>0?`<div class="card">
+  const tabBar=`<div class="row gap-1" style="margin-bottom:12px">
+    <button class="btn btn-sm ${t==='stock'?'btn-primary':'btn-outline'}" data-action="store-stock-tab" data-val="stock">📦 สต็อกทั้งหมด (${S.parts.length})</button>
+    <button class="btn btn-sm ${t==='order'?'btn-danger':'btn-outline'}" data-action="store-stock-tab" data-val="order">🛒 สั่งซื้อ${lowItems.length>0?` (${lowItems.length})`:''}</button>
+  </div>`;
+
+  if(t==='stock'){
+    const q=(S.searchStock||'').toLowerCase();
+    let all=S.parts.filter(p=>!q||p.name.toLowerCase().includes(q)||p.code.toLowerCase().includes(q));
+    if(S.filterStockStatus==='low') all=all.filter(p=>p.stock<(p.minStock||STOCK_WARN_LEVEL)&&p.stock>0);
+    if(S.filterStockStatus==='out') all=all.filter(p=>p.stock===0);
+    if(S.filterStockStatus==='ok')  all=all.filter(p=>p.stock>=(p.minStock||STOCK_WARN_LEVEL));
+    all.sort(sortByCode);
+    const page=Math.min(S.stockPage||0,Math.max(0,Math.ceil(all.length/PAGE_SIZE)-1));
+    const list=all.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
+    const rows=list.map(p=>{
+      const w=p.minStock||STOCK_WARN_LEVEL;
+      return `<tr class="${p.stock<w?'stock-crit':''}">
+        <td class="font-mono" style="font-size:11px">${esc(p.code)}</td>
+        <td>${esc(p.name)}</td><td>${esc(p.unit)}</td>
+        <td class="right">${w}</td>
+        <td class="right">${p.stock}</td>
+        <td>${stockBadge(p.stock,w)}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="section"><div class="card">
       <div class="card-hdr">
-        <span class="card-hdr-title">🛒 รายการที่ควรสั่งซื้อ (${lowItems.length} รายการ)</span>
-        <button class="btn btn-sm btn-outline-blue" data-action="print-po-proposal">🖨️ พิมพ์ใบเสนอสั่งซื้อ</button>
+        <span class="card-hdr-title">📦 สต็อกทั้งหมด</span>
+        <div class="row gap-1">
+          <input class="input input-sm" id="stock-search" placeholder="🔍 ค้นหา..." style="width:150px" value="${esc(S.searchStock||'')}">
+          ${renderStockFilter()}
+        </div>
       </div>
-      <table class="tbl"><thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>หน่วย</th><th class="right">ขั้นต่ำ</th><th class="right">คงเหลือ</th><th>ขาด</th></tr></thead>
+      ${tabBar}
+      <div style="overflow-x:auto"><table class="tbl">
+        <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>หน่วย</th><th class="right">ขั้นต่ำ</th><th class="right">คงเหลือ</th><th>สถานะ</th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:16px">ไม่พบรายการ</td></tr>'}
+        ${pager(all.length,page,'stockPage',6)}</tbody>
+      </table></div>
+    </div></div>`;
+  }
+
+  // tab: order
+  if(t==='order') return `<div class="section"><div class="card">
+    <div class="card-hdr">
+      <span class="card-hdr-title">🛒 รายการที่ควรสั่งซื้อ (${lowItems.length} รายการ)</span>
+      <button class="btn btn-sm btn-outline-blue" data-action="print-po-proposal">🖨️ พิมพ์ใบเสนอสั่งซื้อ</button>
+    </div>
+    ${tabBar}
+    ${lowItems.length===0?'<div style="text-align:center;padding:24px;color:#9ca3af">✅ ไม่มีสินค้าที่ต้องสั่งซื้อเพิ่ม</div>':
+    `<div style="overflow-x:auto"><table class="tbl">
+      <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>หน่วย</th><th class="right">ขั้นต่ำ</th><th class="right">คงเหลือ</th><th class="right">ขาด</th></tr></thead>
       <tbody>${lowItems.map(p=>{const w=p.minStock||STOCK_WARN_LEVEL;return`<tr class="stock-crit">
         <td class="font-mono" style="font-size:11px">${esc(p.code)}</td>
         <td>${esc(p.name)}</td><td>${esc(p.unit)}</td>
         <td class="right">${w}</td><td class="right">${p.stock}</td>
         <td class="right font-bold" style="color:#dc2626">-${Math.max(0,w-p.stock)}</td>
       </tr>`;}).join('')}</tbody>
-      </table>
-    </div>`:''}
-    <div class="card">
-      <div class="card-hdr">
-        <span class="card-hdr-title">📦 สต็อกทั้งหมด (${S.parts.length} รายการ)</span>
-        <div class="row gap-1">
-          <input class="input input-sm" id="stock-search" placeholder="🔍 ค้นหา..." style="width:150px" value="${esc(S.searchStock||'')}">
-          ${renderStockFilter()}
-        </div>
-      </div>
-      <div style="overflow-x:auto"><table class="tbl">
-        <thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>หน่วย</th><th class="right">ขั้นต่ำ</th><th class="right">คงเหลือ</th><th>สถานะ</th></tr></thead>
-        <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:16px">ไม่พบรายการ</td></tr>'}
-      ${pager(all.length,page,'stockPage',6)}</tbody>
-      </table></div>
-    </div>
-  </div>`;
+    </table></div>`}
+  </div></div>`;
+
 }
 
 // user stock view (read-only simple)
@@ -2462,6 +2486,7 @@ document.addEventListener('click', e => {
   // Settings tabs
   if(act==='settings-tab')    { setState({settingsTab:val}); return; }
   if(act==='admin-stock-tab') { setState({adminStockTab:val,_adjErr:null,_adjOk:null,_stockErr:null,_stockOk:null}); return; }
+  if(act==='store-stock-tab') { setState({storeStockTab:val,stockPage:0}); return; }
 
   // User mgmt
   if(act==='add-user')          { doAddUser(); return; }
@@ -2505,6 +2530,7 @@ document.addEventListener('click', e => {
   if(act==='do-close-job'){ doCloseJob(id); return; }
   if(act==='reset-all-data'){ doResetAllData(); return; }
   if(act==='import-seed-parts'){ doImportSeedParts(); return; }
+  if(act==='apply-stock-patch'){ doApplyStockPatch(); return; }
   if(act==='edit-job')    { const j=S.jobs.find(x=>x.id===id); if(j) setState({modal:{type:'edit-job',jobId:id,desc:j.desc}}); return; }
   if(act==='do-edit-job') { doEditJob(id); return; }
   if(act==='toggle-job'||act==='toggle-job-expand'){ const e2={...S.jobExpanded};e2[id]=!e2[id];setState({jobExpanded:e2}); return; }
@@ -2849,6 +2875,7 @@ function doSaveEditPart(id){
   setState({parts,stockLog:[...S.stockLog,log],_editPartId:null,_stockOk:`✅ บันทึกแก้ไข "${name}" แล้ว`,adminStockTab:'log'});
 }
 
+
 function doAdjustStock(){
   const pId  = parseInt(document.getElementById('adj-part')?.value||'0',10);
   const type = document.getElementById('adj-type')?.value||'add';
@@ -2959,6 +2986,17 @@ function doImportSeedParts(){
   const newParts=[...S.parts,...toAdd];
   setState({parts:newParts,_seedImported:true});
   alert('นำเข้าสำเร็จ! เพิ่ม '+toAdd.length+' รายการ (ข้ามซ้ำ '+(SEED_PARTS.length-toAdd.length)+' รายการ)');
+}
+
+const STOCK_PATCH={"A-1006":117,"A-1013":38,"A-1014":28,"A-1021":71,"A-1027":91,"A-1030":149,"A-1047":403,"A-1048":113,"A-1052":82,"A-1086":672,"A-1087":631,"A-1089":326,"A-1115":400,"A-1116":212,"A-1122":4965,"A-1205":82,"A-1213":76,"A-1278":13738,"A-1328":117,"A-1335":8,"A-1372":11,"A-1385":48,"A-1518":4,"A-1537":1,"A-1557":379,"A-1599":20,"A-1628":15,"A-1632":462,"A-1710":31,"A-1860":476,"A-1912":560,"A-2026":22,"E-1008":107,"E-1148":29,"E-1251":29,"E-1456":1390,"E-1523":2959,"E-1580":950,"E-1585":324,"E-1592":254,"E-1631":95,"E-1646":11,"E-1704":201,"E-1742":500,"E-1746":930,"E-1844":137,"E-1939":470,"E-2050":296,"E-2106":13,"E-2107":14,"E-2167":108,"E-2234":432,"E-2395":212,"E-2412":23,"E-2599":270,"E-2652":88,"E-2653":10,"E-2662":808,"E-2666":710,"E-2683":108,"E-2829":562,"E-3009":253,"E-3083":2130,"E-3084":608,"E-3187":1567,"E-3214":1717,"E-3249":1400,"E-3251":494,"E-3332":242,"E-3376":21,"E-3676":1710,"E-4171":6,"E-4187":188,"E-4244":250,"E-4296":480,"E-4321":33,"E-4328":0,"E-5127":1,"E-5384":74,"E-5590":64,"E-5925":12,"E-5980":6};
+
+function doApplyStockPatch(){
+  const n=Object.keys(STOCK_PATCH).length;
+  if(!window.confirm(`อัพเดตจำนวนคงเหลือ ${n} รายการจาก StockCard_Log_Short?\n\nข้อมูลสต็อกจะถูกบันทึกทันที`)) return;
+  const parts=S.parts.map(p=>Object.prototype.hasOwnProperty.call(STOCK_PATCH,p.code)?{...p,stock:STOCK_PATCH[p.code]}:p);
+  const matched=parts.filter(p=>Object.prototype.hasOwnProperty.call(STOCK_PATCH,p.code)).length;
+  setState({parts,_stockOk:`✅ อัพเดตสต็อก ${matched} รายการแล้ว`});
+  alert(`✅ อัพเดตสต็อกสำเร็จ ${matched} รายการ`);
 }
 
 function doResetAllData(){
