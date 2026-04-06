@@ -480,6 +480,7 @@ function renderTopbar(){
       <div class="topbar-sub">${esc(u.name)}${u.dept?' · '+esc(u.dept):''}${u.position?' · '+esc(u.position):''}</div></div>
     </div>
     <div class="topbar-right">${badge(rd.icon+' '+rd.name,rd.cls)}
+      <button class="btn btn-sm" style="border:1px solid rgba(255,255,255,.3);color:#bfdbfe;background:none" data-action="refresh-data" title="รีเฟรชข้อมูล">🔄</button>
       <button class="btn btn-sm" style="border:1px solid rgba(255,255,255,.3);color:#bfdbfe;background:none" data-action="logout">ออกจากระบบ</button>
     </div>
   </div>`;
@@ -517,6 +518,7 @@ function getTabs(){
       {key:'stock',        label:'📦 สต็อก / สั่งซื้อ', n:lowN||0},
     ],
     admin:[
+      {key:'dashboard', label:'📊 Dashboard'},
       {key:'adminstock',label:'📦 จัดการสต็อก',n:lowN||0},
       {key:'settings',  label:'⚙️ ตั้งค่า'},
     ],
@@ -789,6 +791,161 @@ function renderMachinesPage(){
 }
 
 // ─── ADMIN: STOCK MANAGEMENT ──────────────────────────────────────────────────
+function renderDashboard(){
+  const now = new Date();
+  const today = now.toISOString().slice(0,10);
+  const todayTH = now.toLocaleDateString('th-TH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const thisYM = today.slice(0,7); // yyyy-mm
+
+  // ---- วันสุดท้ายของเดือน? ----
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const isLastDay = now.getDate() === lastDayOfMonth;
+  const thisMonthTH = now.toLocaleDateString('th-TH',{year:'numeric',month:'long'});
+
+  // ---- ตัวเลขสรุป ----
+  const todayReqs   = S.reqs.filter(r=>isoDay(r.createdAt)===today);
+  const todayIssued = S.reqs.filter(r=>r.status==='issued'&&isoDay(r.issuedAt||r.createdAt)===today);
+  const pending     = S.reqs.filter(r=>r.status==='pending').length;
+  const lowStock    = S.parts.filter(p=>p.stock<(p.minStock||STOCK_WARN_LEVEL)).length;
+  const outStock    = S.parts.filter(p=>p.stock===0).length;
+  const thisMonthReqs = S.reqs.filter(r=>r.createdAt&&r.createdAt.slice(0,7)===thisYM);
+
+  // ---- กราฟรายเดือน 12 เดือน ----
+  const months=[];
+  for(let i=11;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const label=d.toLocaleDateString('th-TH',{month:'short',year:'2-digit'});
+    const cnt=S.reqs.filter(r=>r.createdAt&&r.createdAt.slice(0,7)===ym).length;
+    const iss=S.reqs.filter(r=>r.status==='issued'&&(r.issuedAt||r.createdAt||'').slice(0,7)===ym).length;
+    months.push({ym,label,cnt,iss});
+  }
+  const maxM=Math.max(...months.map(m=>m.cnt),1);
+  const monthBars=months.map(m=>{
+    const h=Math.round((m.cnt/maxM)*72);
+    const isCur=m.ym===thisYM;
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;min-width:0">
+      <span style="font-size:10px;font-weight:700;color:${isCur?'#2563eb':'#6b7280'}">${m.cnt||''}</span>
+      <div style="width:100%;background:#f3f4f6;border-radius:4px 4px 0 0;height:72px;display:flex;align-items:flex-end;overflow:hidden">
+        <div style="width:100%;height:${h||2}px;background:${isCur?'#2563eb':'#93c5fd'};transition:height .3s"></div>
+      </div>
+      <span style="font-size:9px;color:${isCur?'#2563eb':'#9ca3af'};font-weight:${isCur?'700':'400'};text-align:center;line-height:1.2;word-break:break-all">${m.label}</span>
+    </div>`;
+  }).join('');
+
+  // ---- ใบเบิกวันนี้ ----
+  const statusMap={pending:{l:'รออนุมัติ',c:'#f59e0b'},approved:{l:'อนุมัติแล้ว',c:'#3b82f6'},preparing:{l:'กำลังจัด',c:'#8b5cf6'},issued:{l:'จ่ายแล้ว',c:'#10b981'},rejected:{l:'ปฏิเสธ',c:'#ef4444'}};
+  const todayRows = todayReqs.length ? todayReqs.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(r=>{
+    const st=statusMap[r.status]||{l:r.status,c:'#9ca3af'};
+    const totalQty=(r.items||[]).reduce((s,i)=>s+Number(i.qty||0),0);
+    return `<tr>
+      <td style="font-size:11px;color:#6b7280">${fmtDT(r.createdAt)}</td>
+      <td><b>${esc(r.createdBy||r.createdByName||'—')}</b><br><span style="font-size:11px;color:#6b7280">${esc(r.dept||'')}</span></td>
+      <td style="font-size:12px">${esc(r.jobId||'—')}</td>
+      <td style="text-align:center">${(r.items||[]).length} รายการ (${totalQty} ชิ้น)</td>
+      <td><span style="background:${st.c}22;color:${st.c};padding:2px 8px;border-radius:12px;font-size:12px;font-weight:700">${st.l}</span></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:20px">ยังไม่มีใบเบิกวันนี้</td></tr>`;
+
+  // ---- ของที่จ่ายวันนี้ ----
+  const issuedRows = todayIssued.length ? todayIssued.slice().sort((a,b)=>(b.issuedAt||b.createdAt).localeCompare(a.issuedAt||a.createdAt)).map(r=>{
+    return (r.items||[]).map(it=>{
+      const part=S.parts.find(p=>String(p.id)===String(it.partId));
+      return `<tr>
+        <td style="font-size:11px;color:#6b7280">${fmtDT(r.issuedAt||r.createdAt)}</td>
+        <td><b>${esc(r.createdBy||r.createdByName||'—')}</b></td>
+        <td style="font-size:12px">${esc(r.jobId||'—')}</td>
+        <td>${part?`<span class="font-mono" style="font-size:11px">${esc(part.code)}</span> ${esc(part.name)}`:'—'}</td>
+        <td style="text-align:center;font-weight:700">${it.qty} ${esc(part?.unit||'')}</td>
+      </tr>`;
+    }).join('');
+  }).join('') : `<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:20px">ยังไม่มีการจ่ายของวันนี้</td></tr>`;
+
+  // ---- แบนเนอร์ปิดเดือน ----
+  const eomBanner = isLastDay ? `
+    <div style="background:linear-gradient(135deg,#dc2626,#b91c1c);border-radius:12px;padding:16px 20px;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:16px;font-weight:800">📅 วันนี้เป็นวันสุดท้ายของเดือน${thisMonthTH}</div>
+        <div style="font-size:13px;opacity:.85;margin-top:4px">มีใบเบิก ${thisMonthReqs.length} ใบในเดือนนี้ — ดาวน์โหลดข้อมูลก่อนลบได้เลย</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" style="background:#fff;color:#dc2626;font-weight:800" data-action="export-month-xls" data-ym="${thisYM}">📥 Export ข้อมูลเดือนนี้</button>
+        <button class="btn" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4)" data-action="clear-month-reqs" data-ym="${thisYM}">🗑️ ลบข้อมูลเดือนนี้</button>
+      </div>
+    </div>` : '';
+
+  return `<div class="section" style="display:flex;flex-direction:column;gap:16px">
+
+    <!-- แบนเนอร์ปิดเดือน -->
+    ${eomBanner}
+
+    <!-- Header วันที่ -->
+    <div style="background:linear-gradient(135deg,#1e40af,#2563eb);border-radius:12px;padding:16px 20px;color:#fff;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px;opacity:.8">Dashboard ผู้ดูแลระบบ</div>
+        <div style="font-size:20px;font-weight:800;margin-top:2px">${todayTH}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;opacity:.8">ใบเบิกวันนี้ / เดือนนี้</div>
+        <div style="font-size:36px;font-weight:800;line-height:1">${todayReqs.length} <span style="font-size:18px;opacity:.7">/ ${thisMonthReqs.length}</span></div>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;text-align:center;border-top:3px solid #10b981">
+        <div style="font-size:28px;font-weight:800;color:#10b981">${todayIssued.length}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px">✔️ จ่ายของวันนี้</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;text-align:center;border-top:3px solid #f59e0b">
+        <div style="font-size:28px;font-weight:800;color:#f59e0b">${pending}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px">⏳ รออนุมัติ</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;text-align:center;border-top:3px solid #ef4444">
+        <div style="font-size:28px;font-weight:800;color:#ef4444">${lowStock}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px">⚠️ สต็อกต่ำ</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;text-align:center;border-top:3px solid #6b7280">
+        <div style="font-size:28px;font-weight:800;color:#6b7280">${outStock}</div>
+        <div style="font-size:12px;color:#6b7280;margin-top:2px">❌ หมดสต็อก</div>
+      </div>
+    </div>
+
+    <!-- กราฟรายเดือน 12 เดือน -->
+    <div class="card">
+      <div class="card-hdr"><span class="card-hdr-title">📈 ใบเบิกรายเดือน (12 เดือนย้อนหลัง)</span></div>
+      <div style="padding:16px">
+        <div style="display:flex;gap:4px;align-items:flex-end">${monthBars}</div>
+        <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:#6b7280">
+          <span><span style="display:inline-block;width:12px;height:12px;background:#2563eb;border-radius:2px;vertical-align:middle;margin-right:4px"></span>เดือนปัจจุบัน</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#93c5fd;border-radius:2px;vertical-align:middle;margin-right:4px"></span>เดือนก่อนหน้า</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ใบเบิกวันนี้ -->
+    <div class="card">
+      <div class="card-hdr"><span class="card-hdr-title">📋 ใบเบิกที่สร้างวันนี้ (${todayReqs.length} ใบ)</span></div>
+      <div style="overflow-x:auto">
+        <table class="tbl"><thead><tr>
+          <th>เวลา</th><th>ผู้เบิก</th><th>Job</th><th>รายการ</th><th>สถานะ</th>
+        </tr></thead><tbody>${todayRows}</tbody></table>
+      </div>
+    </div>
+
+    <!-- ของที่จ่ายวันนี้ -->
+    <div class="card">
+      <div class="card-hdr"><span class="card-hdr-title">✔️ สินค้าที่จ่ายวันนี้ (${todayIssued.length} ใบ)</span></div>
+      <div style="overflow-x:auto">
+        <table class="tbl"><thead><tr>
+          <th>เวลา</th><th>ผู้รับ</th><th>Job</th><th>สินค้า</th><th>จำนวน</th>
+        </tr></thead><tbody>${issuedRows}</tbody></table>
+      </div>
+    </div>
+
+  </div>`;
+}
+
 function renderAdminStock(){
   const t=S.adminStockTab||'list';
   const lowN=S.parts.filter(p=>p.stock<(p.minStock||STOCK_WARN_LEVEL)).length;
@@ -2195,6 +2352,7 @@ function renderModal(){
 function renderPage(){
   const tabs=getTabs();const active=S.tab||tabs[0]?.key;
   switch(active){
+    case 'dashboard':  return renderDashboard();
     case 'adminstock': return renderAdminStock();
     case 'settings':   return renderSettings();
     case 'alljobs':    return renderJobs();
@@ -2289,7 +2447,8 @@ document.addEventListener('click', e => {
   // Login
   if(act==='login-role')   { setState({_loginRole:val,_loginErr:null}); return; }
   if(act==='login-submit') { doLogin(); return; }
-  if(act==='logout')       { setState({user:null,tab:null,_loginErr:null,_loginRole:'user',_loginAdminName:'',modal:null}); return; }
+  if(act==='logout')       { localStorage.removeItem('sj_session'); setState({user:null,tab:null,_loginErr:null,_loginRole:'user',_loginAdminName:'',modal:null}); return; }
+  if(act==='refresh-data') { doRefreshData(); return; }
 
   // Nav
   if(act==='nav')          { setState({tab:val}); return; }
@@ -2420,6 +2579,8 @@ document.addEventListener('click', e => {
   if(act==='toggle-sh')          { const e2={...S.expanded};e2['sh_'+id]=!e2['sh_'+id];setState({expanded:e2}); return; }
   if(act==='print-store-hist')   { doPrintStoreHist(); return; }
   if(act==='export-store-hist-xls'){ doExportStoreHistXLS(); return; }
+  if(act==='export-month-xls')    { doExportMonthXLS(el.dataset.ym); return; }
+  if(act==='clear-month-reqs')    { doClearMonthReqs(el.dataset.ym); return; }
 
   // Report
   if(act==='apply-report')       { doApplyReport(); return; }
@@ -2547,6 +2708,17 @@ document.addEventListener('change', e => {
 
 
 // ─── BUSINESS LOGIC ───────────────────────────────────────────────────────────
+function doRefreshData(){
+  const btn=document.querySelector('[data-action="refresh-data"]');
+  if(btn){ btn.textContent='⏳'; btn.disabled=true; }
+  firebase.database().ref('appdata').once('value').then(snap=>{
+    const data=snap.val();
+    if(data){ DB_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; }); }
+    render();
+    if(btn){ btn.textContent='🔄'; btn.disabled=false; }
+  }).catch(()=>{ if(btn){ btn.textContent='🔄'; btn.disabled=false; } });
+}
+
 function doLogin(){
   const role = S._loginRole;
   if(role==='admin'){
@@ -2554,7 +2726,9 @@ function doLogin(){
     const pin  =  document.getElementById('l-apin') ?.value||'';
     if(!name){ setState({_loginErr:'กรุณาระบุชื่อผู้ดูแลระบบ'}); return; }
     if(pin!==ADMIN_PIN){ setState({_loginErr:'รหัส PIN ไม่ถูกต้อง'}); return; }
-    setState({user:{id:'admin',name,role:'admin',dept:'',position:''},tab:'adminstock',_loginErr:null,_loginAdminName:name});
+    const adminUser={id:'admin',name,role:'admin',dept:'',position:''};
+    setState({user:adminUser,tab:'dashboard',_loginErr:null,_loginAdminName:name});
+    localStorage.setItem('sj_session',JSON.stringify({user:adminUser,tab:'dashboard'}));
     requestNotifPerm(); _lastPendingN=-1; _lastApprovedN=-1;
     return;
   }
@@ -2566,7 +2740,9 @@ function doLogin(){
   if(u.status!=='active'){ setState({_loginErr:'บัญชีนี้ถูกระงับ'}); return; }
   if(u.pin!==pin){ setState({_loginErr:'รหัส PIN ไม่ถูกต้อง'}); return; }
   const defaultTabs={user:'create',approver:'pending',store:'store'};
-  setState({user:{...u},tab:defaultTabs[u.role]||'create',_loginErr:null});
+  const tab=defaultTabs[u.role]||'create';
+  setState({user:{...u},tab,_loginErr:null});
+  localStorage.setItem('sj_session',JSON.stringify({user:{...u},tab}));
   requestNotifPerm(); _lastPendingN=-1; _lastApprovedN=-1;
 }
 
@@ -3204,6 +3380,50 @@ function doPrintReport(){
 }
 
 // ─── doExportReportXLS ────────────────────────────────────────────────────────
+function doExportMonthXLS(ym){
+  if(!ym) return;
+  const monthReqs=S.reqs.filter(r=>r.createdAt&&r.createdAt.slice(0,7)===ym);
+  if(!monthReqs.length){ alert('ไม่มีข้อมูลในเดือนนี้'); return; }
+  const d=new Date(ym+'-01');
+  const monthLabel=d.toLocaleDateString('th-TH',{year:'numeric',month:'long'});
+  const hdr=`<tr><th>วันที่</th><th>รหัสใบเบิก</th><th>ผู้เบิก</th><th>แผนก</th><th>Job</th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>หน่วย</th><th>สถานะ</th><th>ผู้อนุมัติ</th><th>จ่ายโดย</th><th>วันที่จ่าย</th></tr>`;
+  let rows='';
+  monthReqs.slice().sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).forEach(r=>{
+    const statusTH={pending:'รออนุมัติ',approved:'อนุมัติแล้ว',preparing:'กำลังจัด',issued:'จ่ายแล้ว',rejected:'ปฏิเสธ'};
+    (r.items||[{partId:'',qty:''}]).forEach((it,idx)=>{
+      const part=S.parts.find(p=>String(p.id)===String(it.partId));
+      rows+=`<tr>
+        <td>${idx===0?fmtDT(r.createdAt):''}</td>
+        <td>${idx===0?esc(r.id):''}</td>
+        <td>${idx===0?esc(r.createdBy||r.createdByName||''):''}</td>
+        <td>${idx===0?esc(r.dept||''):''}</td>
+        <td>${idx===0?esc(r.jobId||''):''}</td>
+        <td>${esc(part?.code||it.partId||'')}</td>
+        <td>${esc(part?.name||'')}</td>
+        <td>${it.qty||''}</td>
+        <td>${esc(part?.unit||'')}</td>
+        <td>${idx===0?(statusTH[r.status]||r.status):''}</td>
+        <td>${idx===0?esc(r.approvedBy||''):''}</td>
+        <td>${idx===0?esc(r.issuedBy||''):''}</td>
+        <td>${idx===0?fmtDT(r.issuedAt||''):''}</td>
+      </tr>`;
+    });
+  });
+  downloadXLS(`ข้อมูลเบิก-${ym}.xls`,`<h3>${esc(S.companyName||'')} — ข้อมูลการเบิกสินค้า ${monthLabel}</h3><table>${hdr}${rows}</table>`);
+}
+
+function doClearMonthReqs(ym){
+  if(!ym) return;
+  const toDelete=S.reqs.filter(r=>r.createdAt&&r.createdAt.slice(0,7)===ym&&(r.status==='issued'||r.status==='rejected'));
+  const d=new Date(ym+'-01');
+  const monthLabel=d.toLocaleDateString('th-TH',{year:'numeric',month:'long'});
+  if(!toDelete.length){ alert(`ไม่มีใบเบิกที่จ่ายแล้วหรือปฏิเสธแล้วในเดือน${monthLabel}`); return; }
+  if(!confirm(`⚠️ ลบข้อมูลใบเบิกที่ "จ่ายแล้ว" และ "ปฏิเสธ" ของเดือน${monthLabel}\n\nจำนวน ${toDelete.length} ใบ\n\nใบที่ยังรออนุมัติหรืออนุมัติแล้วจะไม่ถูกลบ\n\nดาวน์โหลด XLS ก่อนแล้วยืนยัน?`)) return;
+  const newReqs=S.reqs.filter(r=>!(r.createdAt&&r.createdAt.slice(0,7)===ym&&(r.status==='issued'||r.status==='rejected')));
+  setState({reqs:newReqs});
+  alert(`✅ ลบ ${toDelete.length} ใบเบิกของเดือน${monthLabel}แล้ว`);
+}
+
 function doExportReportXLS(){
   const rows=buildReportRows();
   let tbl='';
@@ -3438,10 +3658,21 @@ function initFirebase(){
     }
   }).then(()=>{
     // ฟังการเปลี่ยนแปลง real-time จาก Firebase
+    // restore session จาก localStorage
+    try{
+      const saved=localStorage.getItem('sj_session');
+      if(saved){ const sess=JSON.parse(saved); if(sess.user){ S.user=sess.user; S.tab=sess.tab||null; } }
+    }catch(_){}
+
     dbRef.on('value',snap=>{
       const data=snap.val();
       if(data){
         DB_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; });
+        // ตรวจสอบว่า user ยังอยู่ใน users list (กรณี admin ระงับบัญชี)
+        if(S.user && S.user.role!=='admin'){
+          const stillActive=S.users.find(u=>u.id===S.user.id&&u.status==='active');
+          if(!stillActive){ localStorage.removeItem('sj_session'); S.user=null; S.tab=null; }
+        }
       }
       render();
       checkNotify();
