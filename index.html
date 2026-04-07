@@ -1346,7 +1346,10 @@ function renderJobs(){
           <div><label class="field-label">รหัสงาน * (ล็อกถาวร)</label>
             <input class="input input-mono" id="j-code" placeholder="เช่น JOB-2025-001" value="${esc(S._jCode||'')}"></div>
           <div><label class="field-label">รายละเอียดงาน</label>
-            <input class="input" id="j-desc" placeholder="รายละเอียด" value="${esc(S._jDesc||'')}"></div>
+            <select class="input" id="j-desc">
+              <option value="">— เลือกรายละเอียด —</option>
+              ${['สำหรับทาวเวอร์เครน เช่า','สำหรับทาวเวอร์เครน ขาย-รอเก็บเงิน','สำหรับทาวเวอร์เครน ประกัน','สำหรับลิฟท์ เช่า','สำหรับลิฟท์ ขาย-รอเก็บเงิน','สำหรับลิฟท์ ประกัน'].map(o=>`<option${S._jDesc===o?' selected':''}>${esc(o)}</option>`).join('')}
+            </select></div>
           <div><label class="field-label">ลูกค้า</label>
             ${(()=>{
               const curCust=S.customers.find(c=>c.id===S._jCustSel);
