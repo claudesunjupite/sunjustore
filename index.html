@@ -211,7 +211,7 @@ const DEFAULT_LOCATIONS = [
   'งานซ่อมชุดตู้ไฟระบบคอนโทรล แบบ 1 ระบบ (crane/derrick)',
   'งานซ่อมชุดตู้ไฟระบบคอนโทรล แบบ 2 ระบบ (crane/derrick)',
   'งานซ่อมระบบตู้ไฟสตาร์ทและสวิง (crane/derrick)',
-  'งานซ่อมระบบตู้ไฟลิฟท์กอลสร้าง',
+  'งานซ่อมระบบตู้ไฟลิฟท์ก่อสร้าง',
   'งานซ่อมชุดปั้มเบรคเซฟตี้ (crane/derrick)','อื่นๆ'
 ];
 const DEFAULT_MACHINE_TYPES = ['Towercrane','Derrick crane','Passenger Hoist'];
@@ -257,7 +257,7 @@ const S = {
   returns:[],
   expanded:{},jobExpanded:{},
   createLines:[{id:1,partId:'',qty:1,location:''}],
-  createJob:'',createNote:'',
+  createJob:'',createNote:'',createRef:'',
   modal:null,
   filterStatus:'all',filterJob:'all',myJobFilter:'all',
   storeTab:'approved',jobTab:'open',
@@ -1500,6 +1500,9 @@ function renderCreate(){
       <div><label class="field-label">หมายเหตุ</label>
         <textarea class="input" id="c-note" rows="2" placeholder="หมายเหตุ (ถ้ามี)">${esc(S.createNote||'')}</textarea>
       </div>
+      <div><label class="field-label">เลขที่อ้างอิง / เอกสารอ้างอิง</label>
+        <input class="input" id="c-ref" placeholder="เช่น WO-123, PO-456 (ถ้ามี)" value="${esc(S.createRef||'')}">
+      </div>
       <button class="btn btn-primary btn-full" data-action="confirm-submit-req">📤 ตรวจสอบและส่งใบเบิก</button>
     </div>
   </div></div>`;
@@ -1620,7 +1623,8 @@ function renderReqCard(r,opts){
         <thead><tr><th>รายการ</th><th>รหัส</th><th class="right">จำนวน</th><th>หน่วย</th><th>ตำแหน่ง</th></tr></thead>
         <tbody>${itemRows}</tbody>
       </table>
-      ${r.note?`<div class="text-xs text-gray" style="margin-bottom:6px">📌 ${esc(r.note)}</div>`:''}
+      ${r.note?`<div class="text-xs text-gray" style="margin-bottom:4px">📌 หมายเหตุ: ${esc(r.note)}</div>`:''}
+      ${r.ref?`<div class="text-xs text-gray" style="margin-bottom:6px">📎 อ้างอิง: <strong>${esc(r.ref)}</strong></div>`:''}
       ${rets.length>0?`<div style="border-top:1px solid #fed7aa;padding-top:6px;margin-bottom:6px">
         <div class="text-xs font-bold" style="color:#c2410c;margin-bottom:4px">🔄 ประวัติคืน</div>${retRows}</div>`:''}
       ${actions}
@@ -2284,7 +2288,7 @@ function renderModal(){
   if(!S.modal) return '';
   const {type}=S.modal;
   if(type==='confirm-submit'){
-    const {jobId,lines,note}=S.modal;
+    const {jobId,lines,note,ref}=S.modal;
     const job=S.jobs.find(j=>j.id===jobId)||null;
     const cust=S.customers.find(c=>c.id===job?.customerId)||null;
     const jobDisplay=job?job.code:(jobId||'ไม่ระบุ Job');
@@ -2302,7 +2306,8 @@ function renderModal(){
       <table class="tbl" style="margin-bottom:8px">
         <thead><tr><th>รายการ</th><th>รหัส</th><th class="right">จำนวน</th><th>หน่วย</th><th>ตำแหน่ง</th><th>สต็อก</th></tr></thead>
         <tbody>${rows}</tbody></table>
-      ${note?`<div class="text-xs text-gray">หมายเหตุ: ${esc(note)}</div>`:''}
+      ${note?`<div class="text-xs text-gray">📌 หมายเหตุ: ${esc(note)}</div>`:''}
+      ${ref?`<div class="text-xs text-gray">📎 อ้างอิง: ${esc(ref)}</div>`:''}
       <div class="modal-footer">
         <button class="btn btn-outline" data-action="modal-cancel">ยกเลิก</button>
         <button class="btn btn-primary" data-action="do-submit-req">✅ ยืนยัน${warnings.length>0?' (ตัดรายการไม่พอออก)':''}</button>
@@ -2411,9 +2416,11 @@ function render(){
     };
   }
 
+  const _sy=window.scrollY;
   if(!S.user){app.innerHTML=renderLogin()+renderModal();return;}
   app.innerHTML=renderTopbar()+renderAlerts()+renderNav()+renderSummaryCards()
     +`<div class="page-wrap">${renderPage()}</div>`+renderModal();
+  window.scrollTo({top:_sy,behavior:'instant'});
 
   // คืน focus หลัง re-render
   if(fi){
@@ -2638,6 +2645,8 @@ document.addEventListener('input', e => {
   const el=e.target;
   if(el.id==='stock-search') { setState({searchStock:el.value,stockPage:0}); return; }
   if(el.id==='admin-stock-search') { setState({searchStock:el.value,adminStockPage:0}); return; }
+  if(el.id==='c-note') { S.createNote=el.value; return; }
+  if(el.id==='c-ref')  { S.createRef=el.value; return; }
   const act=el.dataset.action||'';
   const lid=el.dataset.lid||'';
   // Part search input — live filter
@@ -3012,7 +3021,7 @@ function doResetAllData(){
     returns:[],
     expanded:{},jobExpanded:{},
     createLines:[{id:1,partId:'',qty:1,location:''}],
-    createJob:'',createNote:'',
+    createJob:'',createNote:'',createRef:'',
     modal:null,
     filterStatus:'all',filterJob:'all',myJobFilter:'all',
     storeTab:'approved',jobTab:'open',
@@ -3025,16 +3034,17 @@ function doResetAllData(){
 function doValidateCreate(){
   const jobId=document.getElementById('c-job')?.value||'';
   const note =(document.getElementById('c-note')?.value||'').trim();
+  const ref  =(document.getElementById('c-ref')?.value||'').trim();
   for(const l of S.createLines){
     if(!l.partId){ setState({_createErr:'กรุณาเลือกสินค้าทุกรายการ'}); return; }
     if(l.qty<1)  { setState({_createErr:'จำนวนต้องมากกว่า 0'}); return; }
     // location has default so always filled
   }
-  setState({modal:{type:'confirm-submit',jobId,note,lines:[...S.createLines]},_createErr:null});
+  setState({modal:{type:'confirm-submit',jobId,note,ref,lines:[...S.createLines]},_createErr:null});
 }
 
 function doSubmitReq(){
-  const {jobId,note}=S.modal||{};
+  const {jobId,note,ref}=S.modal||{};
   const u=S.user;
   const id=genId('REQ');
   // Snapshot job/customer info at creation time (so print never relies on live lookup)
@@ -3047,9 +3057,9 @@ function doSubmitReq(){
     machineId:job?.machineId||'', machineType:job?.machineType||'',
     custId:cust?.id||'', custName:cust?.name||'',
     createdBy:u.id||u.name, createdByName:u.name, dept:u.dept||'',
-    status:'pending', items, note, createdAt:nowISO()
+    status:'pending', items, note, ref:ref||'', createdAt:nowISO()
   };
-  setState({reqs:[...S.reqs,req],createLines:[{id:1,partId:'',qty:1,location:S.locations[0]||''}],createJob:'',createNote:'',modal:null,_createErr:null,_createOk:`ส่งใบเบิก ${id} แล้ว`});
+  setState({reqs:[...S.reqs,req],createLines:[{id:1,partId:'',qty:1,location:S.locations[0]||''}],createJob:'',createNote:'',createRef:'',modal:null,_createErr:null,_createOk:`ส่งใบเบิก ${id} แล้ว`});
 }
 
 function doApprove(id){
