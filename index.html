@@ -230,7 +230,7 @@ const fmtDT   = iso => { try{const d=new Date(iso);return d.toLocaleDateString('
 const fmtDate = iso => { try{return new Date(iso).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'});}catch(e){return iso||'';} };
 const isoDay  = iso => { try{return iso.slice(0,10);}catch(e){return '';} };
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-let _seq=1; const genId=p=>`${p}-${String(_seq++).padStart(4,'0')}`;
+let _seq=Math.floor(Date.now()/1000)%9000+1000; const genId=p=>`${p}-${String(_seq++).padStart(4,'0')}`;
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const S = {
@@ -2708,6 +2708,8 @@ document.addEventListener('change', e => {
 
   // Job customer select
   if(el.id==='j-cust'){ setState({_jCustSel:el.value,_jMachId:''}); return; }
+  // Create req: job select — save to state so re-render keeps selection
+  if(el.id==='c-job'){ S.createJob=el.value; return; }
   // line-part: update partId
   if(act==='line-part'&&lid){
     const lines=S.createLines.map(l=>String(l.id)===lid?{...l,partId:Number(el.value)||el.value}:l);
