@@ -3039,12 +3039,16 @@ function doValidateCreate(){
   const jobId=document.getElementById('c-job')?.value||'';
   const note =(document.getElementById('c-note')?.value||'').trim();
   const ref  =(document.getElementById('c-ref')?.value||'').trim();
-  for(const l of S.createLines){
+  // sync location from DOM select (no change event fires when user leaves default first option)
+  const syncedLines=S.createLines.map(l=>{
+    const sel=document.querySelector(`[data-action="line-loc"][data-lid="${l.id}"]`);
+    return sel?{...l,location:sel.value}:l;
+  });
+  for(const l of syncedLines){
     if(!l.partId){ setState({_createErr:'กรุณาเลือกสินค้าทุกรายการ'}); return; }
     if(l.qty<1)  { setState({_createErr:'จำนวนต้องมากกว่า 0'}); return; }
-    // location has default so always filled
   }
-  setState({modal:{type:'confirm-submit',jobId,note,ref,lines:[...S.createLines]},_createErr:null});
+  setState({createLines:syncedLines,modal:{type:'confirm-submit',jobId,note,ref,lines:[...syncedLines]},_createErr:null});
 }
 
 function doSubmitReq(){
@@ -3724,6 +3728,20 @@ function initFirebase(){
         if(S.locations&&S.locations.some(l=>l==='งานซ่อมระบบตู้ไฟลิฟท์กอลสร้าง')){
           S.locations=S.locations.map(l=>l==='งานซ่อมระบบตู้ไฟลิฟท์กอลสร้าง'?'งานซ่อมระบบตู้ไฟลิฟท์ก่อสร้าง':l);
           saveDB();
+        }
+        // แก้ req ID ซ้ำ (เกิดจาก _seq=1 reset ทุก session)
+        if(Array.isArray(S.reqs)){
+          const seen=new Set();let dupFixed=false;
+          S.reqs=S.reqs.map(r=>{
+            if(!seen.has(r.id)){seen.add(r.id);return r;}
+            const oldId=r.id;let s=2;let newId=`${oldId}-${s}`;
+            while(seen.has(newId)){s++;newId=`${oldId}-${s}`;}
+            seen.add(newId);
+            if(Array.isArray(S.returns)) S.returns=S.returns.map(rt=>rt.reqId===oldId?{...rt,reqId:newId}:rt);
+            dupFixed=true;
+            return {...r,id:newId};
+          });
+          if(dupFixed) saveDB();
         }
         // ตรวจสอบว่า user ยังอยู่ใน users list (กรณี admin ระงับบัญชี)
         if(S.user && S.user.role!=='admin'){
