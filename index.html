@@ -1500,8 +1500,8 @@ function renderCreate(){
       <div><label class="field-label">หมายเหตุ</label>
         <textarea class="input" id="c-note" rows="2" placeholder="หมายเหตุ (ถ้ามี)">${esc(S.createNote||'')}</textarea>
       </div>
-      <div><label class="field-label">เลขที่อ้างอิง / เอกสารอ้างอิง</label>
-        <input class="input" id="c-ref" placeholder="เช่น WO-123, PO-456 (ถ้ามี)" value="${esc(S.createRef||'')}">
+      <div><label class="field-label">ข้อความอ้างอิง</label>
+        <input class="input" id="c-ref" placeholder="" value="${esc(S.createRef||'')}">
       </div>
       <button class="btn btn-primary btn-full" data-action="confirm-submit-req">📤 ตรวจสอบและส่งใบเบิก</button>
     </div>
@@ -2420,7 +2420,6 @@ function render(){
   if(!S.user){app.innerHTML=renderLogin()+renderModal();return;}
   app.innerHTML=renderTopbar()+renderAlerts()+renderNav()+renderSummaryCards()
     +`<div class="page-wrap">${renderPage()}</div>`+renderModal();
-  window.scrollTo({top:_sy,behavior:'instant'});
 
   // คืน focus หลัง re-render
   if(fi){
@@ -2434,9 +2433,12 @@ function render(){
     }
   }
 
-  // เลื่อน nav ให้ tab ที่ active อยู่ในหน้าจอ
+  // เลื่อน nav ให้ tab ที่ active อยู่ในหน้าจอ (แนวนอนเท่านั้น)
   const activeBtn=document.querySelector('.nav-btn.active');
   if(activeBtn) activeBtn.scrollIntoView({block:'nearest',inline:'nearest'});
+
+  // คืน scroll position — ต้องอยู่หลังสุดเพื่อไม่ให้ scrollIntoView override
+  window.scrollTo({top:_sy,behavior:'instant'});
 }
 
 // ─── ADMIN: COMPANY SETTINGS ──────────────────────────────────────────────────
@@ -3716,6 +3718,11 @@ function initFirebase(){
       const data=snap.val();
       if(data){
         DB_KEYS.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; });
+        // แก้คำผิดใน locations อัตโนมัติ (บันทึกกลับ Firebase ครั้งเดียว)
+        if(S.locations&&S.locations.some(l=>l==='งานซ่อมระบบตู้ไฟลิฟท์กอลสร้าง')){
+          S.locations=S.locations.map(l=>l==='งานซ่อมระบบตู้ไฟลิฟท์กอลสร้าง'?'งานซ่อมระบบตู้ไฟลิฟท์ก่อสร้าง':l);
+          saveDB();
+        }
         // ตรวจสอบว่า user ยังอยู่ใน users list (กรณี admin ระงับบัญชี)
         if(S.user && S.user.role!=='admin'){
           const stillActive=S.users.find(u=>u.id===S.user.id&&u.status==='active');
