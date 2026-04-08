@@ -1890,7 +1890,10 @@ function renderStoreHistory(){
       <td>${job?.machineType?`<span style="font-size:11px">${esc(job.machineType)}</span>`:'—'}</td>
       <td class="right">${r.items.reduce((s,it)=>s+it.qty,0)}</td>
       <td>${retQty>0?`<span style="color:#16a34a;font-size:11px">+${retQty} คืน</span>`:'—'}</td>
-      <td style="color:#9ca3af;font-size:14px">${exp?'▲':'▼'}</td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="btn btn-xs btn-outline-blue" data-action="print-slip-approver" data-id="${r.id}" style="padding:2px 7px;font-size:11px;margin-right:6px" title="พิมพ์ใบเบิก">🖨️</button>
+        <span style="color:#9ca3af;font-size:14px">${exp?'▲':'▼'}</span>
+      </td>
     </tr>${exp?itemRows:''}${photoRow}`;
   }).join('');
 
