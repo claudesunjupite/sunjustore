@@ -2536,8 +2536,8 @@ document.addEventListener('click', e => {
 
   // Job form customer change
   if(act==='job-cust-change'){ setState({_jCustSel:el.value,_jMachId:''}); return; }
-  if(act==='toggle-jcust'){ setState({_jCustOpen:!S._jCustOpen}); return; }
-  if(act==='pick-jcust'){ setState({_jCustSel:el.dataset.val||'',_jCustOpen:false,_jMachId:''}); return; }
+  if(act==='toggle-jcust'){ e.stopPropagation(); e.preventDefault(); setState({_jCustOpen:!S._jCustOpen}); return; }
+  if(act==='pick-jcust'){ e.stopPropagation(); setState({_jCustSel:el.dataset.val||'',_jCustOpen:false,_jMachId:''}); return; }
 
   // Admin stock
   if(act==='add-part')        { doAddPart(); return; }
