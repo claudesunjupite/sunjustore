@@ -3320,6 +3320,7 @@ function doPrintSlip(reqId){
       <div>ลงชื่อผู้อนุมัติ ..............................<br><br>วันที่ ...............</div>
       <div>ลงชื่อผู้จ่าย ..............................<br><br>วันที่ ...............</div>
     </div>
+    ${(req.photos||[]).length>0?`<div style="margin-top:24px;border-top:1px solid #e5e7eb;padding-top:16px"><p style="font-size:12px;font-weight:700;margin-bottom:10px">📷 รูปภาพประกอบการจ่ายสินค้า</p><div style="display:flex;gap:12px;flex-wrap:wrap">${(req.photos||[]).map(p=>`<img src="${p}" style="width:200px;height:200px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb">`).join('')}</div></div>`:''}
   </body></html>`);
 }
 
@@ -3357,6 +3358,7 @@ function doPrintSlipApprover(reqId){
       <div>ลงชื่อผู้อนุมัติ ..............................<br><br>วันที่ ...............</div>
       <div>ลงชื่อผู้จ่าย ..............................<br><br>วันที่ ...............</div>
     </div>
+    ${(req.photos||[]).length>0?`<div style="margin-top:24px;border-top:1px solid #e5e7eb;padding-top:16px"><p style="font-size:12px;font-weight:700;margin-bottom:10px">📷 รูปภาพประกอบการจ่ายสินค้า</p><div style="display:flex;gap:12px;flex-wrap:wrap">${(req.photos||[]).map(p=>`<img src="${p}" style="width:200px;height:200px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb">`).join('')}</div></div>`:''}
   </body></html>`);
 }
 
