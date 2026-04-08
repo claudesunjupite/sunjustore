@@ -36,8 +36,8 @@ table{border-collapse:collapse;width:100%}
 .summary-card .lbl{font-size:11px;font-weight:600;margin-top:2px}
 .s-yellow{background:#fefce8;color:#854d0e}.s-orange{background:#fff7ed;color:#9a3412}
 .s-blue{background:#eff6ff;color:#1e40af}.s-green{background:#f0fdf4;color:#166534}.s-red{background:#fef2f2;color:#991b1b}
-.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:12px}
-.card-hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:12px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:12px}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:12px 16px;background:#f9fafb;border-bottom:1px solid #e5e7eb;border-radius:12px 12px 0 0}
 .card-hdr-title{font-weight:700;color:#374151}
 .section{padding:16px;display:flex;flex-direction:column;gap:12px}
 .field-label{display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px}
@@ -138,7 +138,7 @@ input[type="number"]{-moz-appearance:textfield}
 .photo-add:hover{border-color:#3b82f6;color:#3b82f6;background:#eff6ff}
 .sfw{position:relative;display:block;width:100%}
 .sfw-btn{display:flex;align-items:center;gap:6px;justify-content:space-between;cursor:pointer;width:100%;text-align:left}
-.sfw-drop{position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:300;min-width:160px;overflow:hidden}
+.sfw-drop{position:fixed;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:9999;min-width:200px;max-height:280px;overflow-y:auto}
 .sfw-opt{padding:10px 14px;cursor:pointer;font-size:13px;white-space:nowrap;border-bottom:1px solid #f3f4f6}
 .sfw-opt:last-child{border-bottom:none}
 .sfw-opt:hover,.sfw-opt.active{background:#eff6ff}
@@ -524,6 +524,8 @@ function getTabs(){
     admin:[
       {key:'dashboard', label:'📊 Dashboard'},
       {key:'adminstock',label:'📦 จัดการสต็อก',n:lowN||0},
+      {key:'alljobs',   label:'🗂️ จัดการ Job'},
+      {key:'allreqs',   label:'📋 ใบเบิกทั้งหมด'},
       {key:'settings',  label:'⚙️ ตั้งค่า'},
     ],
   };
@@ -1351,15 +1353,10 @@ function renderJobs(){
               ${['สำหรับทาวเวอร์เครน เช่า','สำหรับทาวเวอร์เครน ขาย-รอเก็บเงิน','สำหรับทาวเวอร์เครน ประกัน','สำหรับลิฟท์ เช่า','สำหรับลิฟท์ ขาย-รอเก็บเงิน','สำหรับลิฟท์ ประกัน'].map(o=>`<option${S._jDesc===o?' selected':''}>${esc(o)}</option>`).join('')}
             </select></div>
           <div><label class="field-label">ลูกค้า</label>
-            ${(()=>{
-              const curCust=S.customers.find(c=>c.id===S._jCustSel);
-              const label=curCust?esc(curCust.name):'— เลือกลูกค้า —';
-              const drop=S._jCustOpen?`<div class="sfw-drop" style="z-index:200">
-                <div class="sfw-opt${!S._jCustSel?' active':''}" data-action="pick-jcust" data-val="">— เลือกลูกค้า —</div>
-                ${S.customers.map(c=>`<div class="sfw-opt${S._jCustSel===c.id?' active':''}" data-action="pick-jcust" data-val="${c.id}">${esc(c.name)}</div>`).join('')}
-              </div>`:'';
-              return `<div class="sfw"><button type="button" class="input sfw-btn" data-action="toggle-jcust">${label} <span>▾</span></button>${drop}</div>`;
-            })()}
+            <select class="input" id="j-cust" data-action="job-cust-change">
+              <option value="">— เลือกลูกค้า —</option>
+              ${(S.customers||[]).map(c=>`<option value="${esc(c.id)}"${S._jCustSel===c.id?' selected':''}>${esc(c.name)}</option>`).join('')}
+            </select>
           </div>
           ${(()=>{
             const selCust=S.customers.find(c=>c.id===S._jCustSel);
@@ -2445,6 +2442,18 @@ function render(){
 
   // คืน scroll position — ต้องอยู่หลังสุดเพื่อไม่ให้ scrollIntoView override
   window.scrollTo({top:_sy,behavior:'instant'});
+
+  // วาง sfw-drop ด้วย position:fixed ให้ตรงกับปุ่มที่เปิด
+  const sfwDrop=document.querySelector('.sfw-drop');
+  if(sfwDrop){
+    const btn=sfwDrop.closest('.sfw')?.querySelector('.sfw-btn');
+    if(btn){
+      const r=btn.getBoundingClientRect();
+      sfwDrop.style.top=(r.bottom+4)+'px';
+      sfwDrop.style.left=r.left+'px';
+      sfwDrop.style.width=r.width+'px';
+    }
+  }
 }
 
 // ─── ADMIN: COMPANY SETTINGS ──────────────────────────────────────────────────
