@@ -77,7 +77,7 @@ input[type="number"]{-moz-appearance:textfield}
 .tbl td{padding:8px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle;font-size:12px}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr:hover td{background:#f9fafb}
-.right{text-align:right}
+.right{text-align:right}.tbl th.right{text-align:right}
 .list-item{padding:12px 16px;border-bottom:1px solid #f3f4f6;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .list-item:last-child{border-bottom:none}
 .list-item-clickable{cursor:pointer}.list-item-clickable:hover{background:#f9fafb}
@@ -1838,8 +1838,8 @@ function renderStoreHistory(){
            r.items.some(it=>{const p=S.parts.find(x=>x.id===it.partId);return(p?.name||'').toLowerCase().includes(fQ)||(p?.code||'').toLowerCase().includes(fQ);});
   });
 
-  const totalItems=rows.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+it.qty,0),0);
-  const totalRets =rows.reduce((s,r)=>s+S.returns.filter(x=>x.reqId===r.id&&x.status==='completed_return').reduce((ss,rt)=>ss+rt.qty,0),0);
+  const totalItems=rows.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+(Number(it.qty)||0),0),0);
+  const totalRets =rows.reduce((s,r)=>s+S.returns.filter(x=>x.reqId===r.id&&x.status==='completed_return').reduce((ss,rt)=>ss+(Number(rt.qty)||0),0),0);
 
   const filterBar=`<div class="row gap-1" style="flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
     <div><label class="field-label">กรองตาม</label>
@@ -1867,7 +1867,7 @@ function renderStoreHistory(){
     const cust=S.customers.find(c=>c.id===job?.customerId);
     const exp=S.expanded['sh_'+r.id];
     const retsForReq=S.returns.filter(x=>x.reqId===r.id&&x.status==='completed_return');
-    const retQty=retsForReq.reduce((s,x)=>s+x.qty,0);
+    const retQty=retsForReq.reduce((s,x)=>s+(Number(x.qty)||0),0);
     const itemRows=r.items.map(it=>{
       const p=S.parts.find(x=>x.id===it.partId);
       return `<tr style="background:#f9fafb">
@@ -1893,7 +1893,7 @@ function renderStoreHistory(){
       <td class="right">${r.items.reduce((s,it)=>s+it.qty,0)}</td>
       <td>${retQty>0?`<span style="color:#16a34a;font-size:11px">+${retQty} คืน</span>`:'—'}</td>
       <td style="white-space:nowrap;text-align:right">
-        <button class="btn btn-xs btn-outline-blue" data-action="print-slip-approver" data-id="${r.id}" style="padding:2px 7px;font-size:11px;margin-right:6px" title="พิมพ์ใบเบิก">🖨️</button>
+        <button class="btn btn-xs btn-outline-blue" data-action="print-slip-approver" data-id="${r.id}" style="padding:2px 7px;font-size:11px;margin-right:6px" title="พิมพ์ใบเบิก">พิมพ์ใบเบิก</button>
         <span style="color:#9ca3af;font-size:14px">${exp?'▲':'▼'}</span>
       </td>
     </tr>${exp?itemRows:''}${photoRow}`;
@@ -1903,8 +1903,8 @@ function renderStoreHistory(){
     ?`<p style="text-align:center;color:#9ca3af;padding:24px 0">ไม่มีข้อมูลที่ตรงกับเงื่อนไข</p>`
     :`<div style="overflow-x:auto"><table class="tbl">
       <thead><tr>
-        <th>วันที่จ่าย</th><th>เลขใบเบิก</th><th>ผู้เบิก</th><th>Job / ลูกค้า</th><th>เครื่องจักร</th>
-        <th class="right">รวมชิ้น</th><th>รับคืน</th><th></th>
+        <th style="white-space:nowrap">วันที่จ่าย</th><th style="white-space:nowrap">เลขใบเบิก</th><th>ผู้เบิก</th><th>Job / ลูกค้า</th><th>เครื่องจักร</th>
+        <th class="right" style="white-space:nowrap">รวมชิ้น</th><th style="white-space:nowrap">รับคืน</th><th style="white-space:nowrap;width:1%"></th>
       </tr></thead>
       <tbody>${tblRows}</tbody>
       <tfoot><tr>
@@ -2107,7 +2107,7 @@ function renderReport(){
       <tbody>${trows}</tbody>
       <tfoot><tr>
         <td colspan="10" style="text-align:right;font-weight:700;background:#f0fdf4">รวมทั้งสิ้น</td>
-        <td class="right font-bold" style="background:#f0fdf4">${rows.reduce((s,r)=>s+r.qty,0)}</td>
+        <td class="right font-bold" style="background:#f0fdf4">${rows.reduce((s,r)=>s+(Number(r.qty)||0),0)}</td>
         <td style="background:#f0fdf4">รวม</td><td style="background:#f0fdf4"></td>
       </tr></tfoot></table></div>`;
     })();
@@ -2120,7 +2120,7 @@ function renderReport(){
       </div>`:''}
     </div>
     <div class="section">${subTabs}${filterInputs}
-      ${rows.length>0?`<div class="info-box info-blue">พบ <strong>${rows.length}</strong> รายการ | รวม <strong>${rows.reduce((s,r)=>s+r.qty,0)}</strong> ชิ้น/หน่วย</div>`:''}
+      ${rows.length>0?`<div class="info-box info-blue">พบ <strong>${rows.length}</strong> รายการ | รวม <strong>${rows.reduce((s,r)=>s+(Number(r.qty)||0),0)}</strong> ชิ้น/หน่วย</div>`:''}
       ${tableHtml}
     </div>
   </div></div>`;
@@ -2154,7 +2154,7 @@ function renderJobClosedReport(subTabsHtml){
         <td>${esc(p?.unit||'')}</td>
       </tr>`;
     }));
-    const totalQtyOut=issuedReqs.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+it.qty,0),0);
+    const totalQtyOut=issuedReqs.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+(Number(it.qty)||0),0),0);
     // Return rows
     const doneRets=jobRets.filter(r=>r.status==='completed_return');
     const retRows=doneRets.map(rt=>{
@@ -2171,7 +2171,7 @@ function renderJobClosedReport(subTabsHtml){
         <td style="font-size:11px;color:#6b7280">${esc(rt.reason||'—')}</td>
       </tr>`;
     });
-    const totalQtyRet=doneRets.reduce((s,r)=>s+r.qty,0);
+    const totalQtyRet=doneRets.reduce((s,r)=>s+(Number(r.qty)||0),0);
     return `<div class="section">
       <div class="card">
         <div class="card-hdr">
@@ -2251,7 +2251,7 @@ function renderJobClosedReport(subTabsHtml){
       const jReqs=S.reqs.filter(r=>r.jobId===j.id);
       const jRets=S.returns.filter(r=>jReqs.some(rq=>rq.id===r.reqId)&&r.status==='completed_return');
       const issued=jReqs.filter(r=>r.status==='issued');
-      const totalOut=issued.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+it.qty,0),0);
+      const totalOut=issued.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+(Number(it.qty)||0),0),0);
       return `<div class="list-item list-item-clickable" data-action="job-rpt-sel" data-id="${j.id}" style="border-radius:8px;border:1px solid #e5e7eb;margin-bottom:6px;background:#fff">
         <div style="flex:1">
           <div class="row gap-2 items-center">
@@ -3221,7 +3221,7 @@ function doPrintStoreHist(){
         <td>${esc(it.location||'—')}</td><td style="text-align:right;font-weight:bold">${it.qty}</td><td>${esc(p?.unit||'')}</td></tr>`;
     });
   });
-  const total=rows.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+it.qty,0),0);
+  const total=rows.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+(Number(it.qty)||0),0),0);
   const css=`body{font-family:Sarabun,sans-serif;font-size:11px;padding:16px}table{width:100%;border-collapse:collapse}th{background:#1d4ed8;color:#fff;padding:5px 8px;text-align:left}td{border:1px solid #d1d5db;padding:4px 8px}tr:nth-child(even)td{background:#f9fafb}.foot td{background:#eff6ff;font-weight:700}@media print{@page{size:A4 landscape;margin:10mm}}`;
   printWin(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>ประวัติการจ่าย</title><style>${css}</style></head><body>
     ${printHeader('ประวัติการจ่ายสินค้า')}
@@ -3401,7 +3401,7 @@ function doPrintJob(jobId){
       tbl+=`<tr><td style="padding-left:24px">${esc(p?.code||'')}</td><td>${esc(p?.name||'—')}</td><td>${it.qty}</td><td>${esc(p?.unit||'')}</td><td colspan="3">${esc(it.location||'')}</td></tr>`;
     });
   });
-  const totalItems=reqs.reduce((s,r)=>s+r.items.reduce((ss,i)=>ss+i.qty,0),0);
+  const totalItems=reqs.reduce((s,r)=>s+r.items.reduce((ss,i)=>ss+(Number(i.qty)||0),0),0);
   printWin(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>ใบรวมเบิก ${esc(job.code)}</title>${printStyles()}</head><body>
     ${printHeader('ใบรวมเบิกอะไหล่ตาม Job')}
     <div class="info-row" style="margin-bottom:12px">
@@ -3666,8 +3666,8 @@ function doExportAllJobsXLS(){
     const jReqs=S.reqs.filter(r=>r.jobId===j.id);
     const issued=jReqs.filter(r=>r.status==='issued');
     const jRets=S.returns.filter(r=>jReqs.some(rq=>rq.id===r.reqId)&&r.status==='completed_return');
-    const out=issued.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+it.qty,0),0);
-    const ret=jRets.reduce((s,r)=>s+r.qty,0);
+    const out=issued.reduce((s,r)=>s+r.items.reduce((ss,it)=>ss+(Number(it.qty)||0),0),0);
+    const ret=jRets.reduce((s,r)=>s+(Number(r.qty)||0),0);
     tbl+=`<tr><td>${esc(j.code)}</td><td>${esc(j.desc||'')}</td><td>${esc(cust?.name||'')}</td>
       <td>${esc(j.machineType||'')}</td><td>${esc(j.machineId||'')}</td>
       <td>${fmtDT(j.createdAt||'')}</td><td>${fmtDT(j.closedAt||'')}</td>
