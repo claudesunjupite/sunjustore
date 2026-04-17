@@ -1604,7 +1604,6 @@ function renderReqCard(r,opts){
     </div>`;
   } else if(mode==='mine'){
     actions=`<div class="row" style="margin-top:8px;gap:6px">
-      ${r.status==='pending'?`<button class="btn btn-sm btn-outline-blue" data-action="open-edit-req" data-id="${r.id}">✏️ แก้ไข</button>`:''}
       ${r.status==='issued'?`<button class="btn btn-sm btn-outline-orange" data-action="open-return" data-id="${r.id}">🔄 บันทึกการคืน</button>`:''}
       <button class="btn btn-sm btn-outline-purple" data-action="print-slip" data-id="${r.id}">พิมพ์ใบเบิก</button>
     </div>`;
@@ -1641,7 +1640,10 @@ function renderReqCard(r,opts){
         </div>
         ${r.reason?`<div class="text-xs text-red" style="margin-top:3px">ปฏิเสธ: ${esc(r.reason)}</div>`:''}
       </div>
-      <span style="color:#d1d5db">${exp?'▲':'▼'}</span>
+      <div class="row gap-1 items-center">
+        ${mode==='mine'&&r.status==='pending'?`<button class="btn btn-sm btn-outline-blue" data-action="open-edit-req" data-id="${r.id}" onclick="event.stopPropagation()">✏️ แก้ไข</button>`:''}
+        <span style="color:#d1d5db">${exp?'▲':'▼'}</span>
+      </div>
     </div>
     ${exp?`<div class="expand-panel">
       <table class="tbl" style="margin-bottom:8px">
