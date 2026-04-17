@@ -183,7 +183,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 
 // Keys ที่ต้องบันทึกลง Firebase (ข้อมูลหลัก ไม่รวม UI state)
-const DB_KEYS = ['users','parts','stockLog','locations','machineTypes','customers','jobs','reqs','returns','companyName'];
+const DB_KEYS = ['users','parts','stockLog','locations','machineTypes','customers','departments','jobs','reqs','returns','companyName'];
 
 function saveDB(){
   const data={};
@@ -252,6 +252,7 @@ const S = {
   locations:[...DEFAULT_LOCATIONS],
   machineTypes:[...DEFAULT_MACHINE_TYPES],
   customers:[],
+  departments:[],
   jobs:[], // {id,code,desc,machineId,customerId,machineType,status,createdAt,closedAt}
   reqs:[], // {id,jobId,createdBy,dept,status,items,note,createdAt,...}
   returns:[],
@@ -611,16 +612,17 @@ function renderSummaryCards(){
 function renderSettings(){
   const t=S.settingsTab||'users';
   const isAdmin=S.user&&S.user.role==='admin';
-  const tabs=[{key:'users',label:'👥 ผู้ใช้'},{key:'locations',label:'📍 ตำแหน่งซ่อม'},{key:'customers',label:'🏢 ลูกค้า'},{key:'machines',label:'🏗️ เครื่องจักร'},{key:'company',label:'🏢 บริษัท'}];
+  const tabs=[{key:'users',label:'👥 ผู้ใช้'},{key:'locations',label:'📍 ตำแหน่งซ่อม'},{key:'customers',label:'🏢 ลูกค้า'},{key:'machines',label:'🏗️ เครื่องจักร'},{key:'departments',label:'🏛️ หน่วยงาน'},{key:'company',label:'🏢 บริษัท'}];
   if(isAdmin) tabs.push({key:'danger',label:'⚠️ รีเซ็ต'});
   const tabBar=`<div class="row gap-1" style="margin-bottom:12px">
     ${tabs.map(tb=>`<button class="btn btn-sm ${t===tb.key?(tb.key==='danger'?'btn-danger':'btn-primary'):'btn-outline'}" data-action="settings-tab" data-val="${tb.key}">${tb.label}</button>`).join('')}
   </div>`;
   if(t==='users')     return `<div class="section">${tabBar}${renderUsersPage()}</div>`;
   if(t==='locations') return `<div class="section">${tabBar}${renderLocationsPage()}</div>`;
-  if(t==='customers') return `<div class="section">${tabBar}${renderCustomersPage()}</div>`;
-  if(t==='machines')  return `<div class="section">${tabBar}${renderMachinesPage()}</div>`;
-  if(t==='company')   return `<div class="section">${tabBar}${renderCompanyPage()}</div>`;
+  if(t==='customers')    return `<div class="section">${tabBar}${renderCustomersPage()}</div>`;
+  if(t==='machines')     return `<div class="section">${tabBar}${renderMachinesPage()}</div>`;
+  if(t==='departments')  return `<div class="section">${tabBar}${renderDepartmentsPage()}</div>`;
+  if(t==='company')      return `<div class="section">${tabBar}${renderCompanyPage()}</div>`;
   if(t==='danger'&&isAdmin) return `<div class="section">${tabBar}${renderDangerPage()}</div>`;
   return '';
 }
@@ -798,6 +800,21 @@ function renderMachinesPage(){
     ${S.machineTypes.map((m,i)=>`<div class="list-item"><span>${esc(m)}</span>
       <button class="btn btn-sm btn-outline-red" data-action="del-machine" data-idx="${i}">ลบ</button>
     </div>`).join('')}
+  </div></div>`;
+}
+
+function renderDepartmentsPage(){
+  return `<div class="card"><div class="card-hdr"><span class="card-hdr-title">🏛️ หน่วยงาน</span></div>
+  <div class="section">
+    ${S._deptErr?`<div class="err">⚠️ ${esc(S._deptErr)}</div>`:''}
+    <div class="row gap-1">
+      <input class="input" id="dept-new" placeholder="เช่น แผนกช่าง, ฝ่ายก่อสร้าง" style="flex:1">
+      <button class="btn btn-success" data-action="add-dept">➕ เพิ่ม</button>
+    </div>
+    ${(S.departments||[]).length===0?'<p style="color:#9ca3af;text-align:center;padding:12px 0">ยังไม่มีหน่วยงาน</p>':
+      (S.departments||[]).map((d,i)=>`<div class="list-item"><span>${esc(d)}</span>
+        <button class="btn btn-sm btn-outline-red" data-action="del-dept" data-idx="${i}">ลบ</button>
+      </div>`).join('')}
   </div></div>`;
 }
 
@@ -1363,24 +1380,26 @@ function renderJobs(){
               return `<div class="sfw" style="position:relative"><button type="button" class="input sfw-btn" data-action="toggle-jcust" style="width:100%;text-align:left">${label} <span style="float:right">▾</span></button>${drop}</div>`;
             })()}
           </div>
-          ${(()=>{
-            const selCust=S.customers.find(c=>c.id===S._jCustSel);
-            const machs=selCust?.machines||[];
-            if(selCust&&machs.length>0){
-              return `<div style="grid-column:span 2"><label class="field-label">🏗️ เลือกเครื่องจักร (จากรายการของลูกค้า)</label>
-                <select class="input" id="j-machine-sel">
-                  <option value="">— เลือกเครื่องจักร —</option>
-                  ${machs.map(m=>`<option value="${esc(m.machineType)}||${esc(m.machineId)}">${esc(m.machineType)} — ${esc(m.machineId)}</option>`).join('')}
-                </select></div>`;
-            }
-            return `<div><label class="field-label">ชนิดเครื่องจักร</label>
-              <select class="input" id="j-mtype">
-                <option value="">— เลือกชนิด —</option>
-                ${S.machineTypes.map(m=>`<option>${esc(m)}</option>`).join('')}
-              </select></div>
-              <div><label class="field-label">รหัสเครื่องจักร</label>
-                <input class="input input-mono" id="j-machid" placeholder="เช่น SFC_TC_001" value="${esc(S._jMachId||'')}"></div>`;
-          })()}
+          <div><label class="field-label">หน่วยงาน</label>
+            <select class="input" id="j-dept">
+              <option value="">— เลือกหน่วยงาน —</option>
+              ${(S.departments||[]).map(d=>`<option${S._jDeptSel===d?' selected':''}>${esc(d)}</option>`).join('')}
+            </select></div>
+          <div><label class="field-label">ชนิดเครื่องจักร</label>
+            <select class="input" id="j-mtype">
+              <option value="">— เลือกชนิด —</option>
+              ${(S.machineTypes||[]).map(m=>`<option${S._jMachType===m?' selected':''}>${esc(m)}</option>`).join('')}
+            </select></div>
+          <div><label class="field-label">รหัสเครื่องจักร</label>
+            <select class="input" id="j-machid">
+              <option value="">— เลือกรหัส —</option>
+              ${(()=>{
+                const selCust=(S.customers||[]).find(c=>c.id===S._jCustSel);
+                const machs=selCust?.machines||[];
+                const filtered=S._jMachType?machs.filter(m=>m.machineType===S._jMachType):machs;
+                return filtered.map(m=>`<option value="${esc(m.machineId)}"${S._jMachId===m.machineId?' selected':''}>${esc(m.machineId)}</option>`).join('');
+              })()}
+            </select></div>
         </div>
         <div><button class="btn btn-success" data-action="open-job">🔓 เปิดรหัสงาน</button></div>
       </div>
@@ -2350,6 +2369,10 @@ function renderModal(){
           <select class="input" id="ej-cust"><option value="">— ไม่ระบุ —</option>
             ${S.customers.map(c=>`<option value="${c.id}"${job.customerId===c.id?' selected':''}>${esc(c.name)}</option>`).join('')}
           </select></div>
+        <div><label class="field-label">หน่วยงาน</label>
+          <select class="input" id="ej-dept"><option value="">— ไม่ระบุ —</option>
+            ${(S.departments||[]).map(d=>`<option${job.dept===d?' selected':''}>${esc(d)}</option>`).join('')}
+          </select></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline" data-action="modal-cancel">ยกเลิก</button>
@@ -2529,6 +2552,8 @@ document.addEventListener('click', e => {
   if(act==='del-customer')  { doDelCustomer(id); return; }
   if(act==='add-machine')   { doAddMachine(); return; }
   if(act==='del-machine')   { doDelMachine(el.dataset.idx); return; }
+  if(act==='add-dept')      { doAddDept(); return; }
+  if(act==='del-dept')      { doDelDept(el.dataset.idx); return; }
   if(act==='save-company')  { doSaveCompany(); return; }
 
   // Customer machines
@@ -2540,9 +2565,9 @@ document.addEventListener('click', e => {
   if(act==='cm-del')      { doDelCustomerMachine(id,val); return; }
 
   // Job form customer change
-  if(act==='job-cust-change'){ setState({_jCustSel:el.value,_jMachId:''}); return; }
+  if(act==='job-cust-change'){ setState({_jCustSel:el.value,_jMachId:'',_jMachType:''}); return; }
   if(act==='toggle-jcust'){ e.stopPropagation(); e.preventDefault(); setState({_jCustOpen:!S._jCustOpen}); return; }
-  if(act==='pick-jcust'){ e.stopPropagation(); setState({_jCustSel:el.dataset.val||'',_jCustOpen:false,_jMachId:''}); return; }
+  if(act==='pick-jcust'){ e.stopPropagation(); setState({_jCustSel:el.dataset.val||'',_jCustOpen:false,_jMachId:'',_jMachType:''}); return; }
 
   // Admin stock
   if(act==='add-part')        { doAddPart(); return; }
@@ -2703,7 +2728,7 @@ document.addEventListener('touchstart', e => {
   // job customer option
   const jc = e.target.closest('[data-action="pick-jcust"]');
   if(jc){ e.preventDefault();
-    setState({_jCustSel:jc.dataset.val||'',_jCustOpen:false,_jMachId:''}); return;
+    setState({_jCustSel:jc.dataset.val||'',_jCustOpen:false,_jMachId:'',_jMachType:''}); return;
   }
 }, {passive:false});
 
@@ -2727,7 +2752,13 @@ document.addEventListener('change', e => {
   }
 
   // Job customer select
-  if(el.id==='j-cust'){ setState({_jCustSel:el.value,_jMachId:''}); return; }
+  if(el.id==='j-cust'){ setState({_jCustSel:el.value,_jMachId:'',_jMachType:''}); return; }
+  // Job machine type select → reset machid selection and re-render filtered list
+  if(el.id==='j-mtype'){ setState({_jMachType:el.value,_jMachId:''}); return; }
+  // Job machine id select
+  if(el.id==='j-machid'){ S._jMachId=el.value; return; }
+  // Job department select
+  if(el.id==='j-dept'){ S._jDeptSel=el.value; return; }
   // Create req: job select — save to state so re-render keeps selection
   if(el.id==='c-job'){ S.createJob=el.value; return; }
   // line-part: update partId
@@ -2872,6 +2903,21 @@ function doDelMachine(idx){
   setState({machineTypes:m});
 }
 
+function doAddDept(){
+  const v=(document.getElementById('dept-new')?.value||'').trim();
+  if(!v){ setState({_deptErr:'กรุณาระบุชื่อหน่วยงาน'}); return; }
+  const deps=S.departments||[];
+  if(deps.includes(v)){ setState({_deptErr:'มีหน่วยงานนี้แล้ว'}); return; }
+  setState({departments:[...deps,v],_deptErr:null});
+  document.getElementById('dept-new').value='';
+}
+
+function doDelDept(idx){
+  if(!confirm('ลบหน่วยงานนี้?')) return;
+  const d=[...(S.departments||[])]; d.splice(Number(idx),1);
+  setState({departments:d});
+}
+
 function doSaveCompany(){
   const v=(document.getElementById('co-name')?.value||'').trim();
   setState({companyName:v});
@@ -2979,22 +3025,15 @@ function doOpenJob(){
   const desc  =(document.getElementById('j-desc') ?.value||'').trim();
   const custId= S._jCustSel||'';
   if(!desc){ setState({_jobErr:'กรุณาระบุรายละเอียดงาน'}); return; }
-  // machine: from customer dropdown or free-text
-  let machId='', mtype='';
-  const selMach=document.getElementById('j-machine-sel')?.value||'';
-  if(selMach){
-    const pts=selMach.split('||');
-    mtype=pts[0]||''; machId=pts[1]||'';
-  } else {
-    machId=(document.getElementById('j-machid')?.value||'').trim();
-    mtype= document.getElementById('j-mtype') ?.value||'';
-  }
+  const machId=(document.getElementById('j-machid')?.value||'').trim();
+  const mtype= document.getElementById('j-mtype') ?.value||'';
+  const dept=  document.getElementById('j-dept')   ?.value||'';
   const id=code||genId('JOB');
   if(code&&S.jobs.some(j=>j.id===id)){ setState({_jobErr:'รหัสงานนี้มีแล้ว'}); return; }
-  const job={id,code:id,desc,machineId:machId,customerId:custId,machineType:mtype,status:'open',createdAt:nowISO(),closedAt:null};
-  setState({jobs:[...S.jobs,job],_jobErr:null,_jCustSel:'',_jMachId:'',_jCode:'',_jDesc:''});
+  const job={id,code:id,desc,machineId:machId,customerId:custId,machineType:mtype,dept,status:'open',createdAt:nowISO(),closedAt:null};
+  setState({jobs:[...S.jobs,job],_jobErr:null,_jCustSel:'',_jMachId:'',_jMachType:'',_jDeptSel:'',_jCode:'',_jDesc:''});
   // clear form fields
-  ['j-code','j-desc','j-machid'].forEach(fid=>{const el=document.getElementById(fid);if(el)el.value='';})
+  ['j-code','j-desc'].forEach(fid=>{const el=document.getElementById(fid);if(el)el.value='';})
 }
 
 function doEditJob(id){
@@ -3002,8 +3041,9 @@ function doEditJob(id){
   const machId  =(document.getElementById('ej-machid')?.value||'').trim();
   const machType= document.getElementById('ej-mtype') ?.value||'';
   const custId  = document.getElementById('ej-cust')  ?.value||'';
+  const dept    = document.getElementById('ej-dept')  ?.value||'';
   if(!desc){ alert('กรุณาระบุรายละเอียดงาน'); return; }
-  const jobs=S.jobs.map(j=>j.id===id?{...j,desc,machineId:machId,machineType:machType,customerId:custId}:j);
+  const jobs=S.jobs.map(j=>j.id===id?{...j,desc,machineId:machId,machineType:machType,customerId:custId,dept}:j);
   setState({jobs,modal:null});
 }
 
