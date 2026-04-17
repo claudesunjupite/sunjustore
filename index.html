@@ -1604,8 +1604,9 @@ function renderReqCard(r,opts){
     </div>`;
   } else if(mode==='mine'){
     actions=`<div class="row" style="margin-top:8px;gap:6px">
+      ${r.status==='pending'?`<button class="btn btn-sm btn-outline-blue" data-action="open-edit-req" data-id="${r.id}">✏️ แก้ไข</button>`:''}
       ${r.status==='issued'?`<button class="btn btn-sm btn-outline-orange" data-action="open-return" data-id="${r.id}">🔄 บันทึกการคืน</button>`:''}
-      <button class="btn btn-sm btn-outline-purple" data-action="print-slip" data-id="${r.id}">🖨️ พิมพ์ใบเบิก</button>
+      <button class="btn btn-sm btn-outline-purple" data-action="print-slip" data-id="${r.id}">พิมพ์ใบเบิก</button>
     </div>`;
   } else if(mode==='allreqs'){
     const canPrint=S.user?.role==='approver'||S.user?.role==='admin'||S.user?.role==='store';
@@ -2380,6 +2381,65 @@ function renderModal(){
       </div>
     </div></div>`;
   }
+  if(type==='edit-req'){
+    const req=S.reqs.find(r=>r.id===S._editReqId); if(!req) return '';
+    const openJobs=S.jobs.filter(j=>j.status==='open');
+    const editLines=(S._editReqLines||[]);
+    const lineBoxes=editLines.map((l,i)=>{
+      const part=S.parts.find(p=>p.id===l.partId||p.id===Number(l.partId));
+      const stockOk=!part||l.qty<=part.stock;
+      return `<div class="line-box" style="${!stockOk?'border-color:#fca5a5':''}">
+        <div class="line-box-hdr">
+          <span class="text-sm font-bold text-gray">รายการที่ ${i+1}</span>
+          <div class="row gap-1">
+            ${!stockOk?`<span style="font-size:11px;color:#dc2626;font-weight:700">⚠️ สต็อกไม่พอ (มี ${part.stock})</span>`:''}
+            ${editLines.length>1?`<button class="btn btn-sm btn-outline-red" data-action="del-line" data-lid="${l.id}">✕ ลบ</button>`:''}
+          </div>
+        </div>
+        <div class="grid-2" style="gap:6px">
+          <div style="grid-column:span 2"><label class="field-label">รายการสินค้า *</label>
+            ${renderPartSearch(l.id, l.partId)}
+          </div>
+          <div><label class="field-label">รหัสสินค้า</label>
+            <input class="input input-sm input-mono input-readonly" readonly value="${part?esc(part.code):'—'}"></div>
+          <div><label class="field-label">หน่วย</label>
+            <input class="input input-sm input-readonly" readonly value="${part?esc(part.unit):'—'}"></div>
+          <div><label class="field-label">จำนวน *</label>
+            <input class="input input-sm" type="text" inputmode="decimal" value="${l.qty}" data-action="line-qty" data-lid="${l.id}"></div>
+          <div><label class="field-label">ตำแหน่ง / Component</label>
+            <select class="input input-sm" data-action="line-loc" data-lid="${l.id}">
+              ${S.locations.map(loc=>`<option${(l.location?l.location===loc:false)?' selected':''}>${esc(loc)}</option>`).join('')}
+            </select></div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="modal-backdrop"><div class="modal" style="max-width:560px;max-height:90vh;overflow-y:auto">
+      <div class="modal-title">✏️ แก้ไขใบเบิก</div>
+      <div class="info-box info-blue" style="margin-bottom:12px">รหัส: <strong>${esc(req.id)}</strong> | สถานะ: รออนุมัติ</div>
+      ${S._editReqErr?`<div class="err" style="margin-bottom:8px">⚠️ ${esc(S._editReqErr)}</div>`:''}
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div><label class="field-label">รหัสงาน (Job Code)</label>
+          <select class="input" id="er-job">
+            <option value="">— เลือกรหัสงาน —</option>
+            ${openJobs.map(j=>{const cust=S.customers.find(c=>c.id===j.customerId);
+              return `<option value="${j.id}"${req.jobId===j.id?' selected':''}>${esc(j.code)}${j.machineType?' ['+esc(j.machineType)+']':''}${cust?' — '+esc(cust.name):''}${j.desc?' — '+esc(j.desc):''}</option>`;
+            }).join('')}
+          </select></div>
+        <div><label class="field-label">รายการอะไหล่ *</label>
+          ${lineBoxes}
+          <button class="btn btn-sm btn-outline-blue" style="margin-top:4px" data-action="edit-add-line">+ เพิ่มรายการ</button>
+        </div>
+        <div><label class="field-label">หมายเหตุ</label>
+          <textarea class="input" id="er-note" rows="2">${esc(req.note||'')}</textarea></div>
+        <div><label class="field-label">ข้อความอ้างอิง</label>
+          <input class="input" id="er-ref" value="${esc(req.ref||'')}"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-action="modal-cancel">ยกเลิก</button>
+        <button class="btn btn-primary" data-action="do-save-edit-req">💾 บันทึก</button>
+      </div>
+    </div></div>`;
+  }
   if(type==='return'){
     const {reqId}=S.modal;const req=S.reqs.find(r=>r.id===reqId);if(!req) return '';
     const opts=req.items.map(it=>{
@@ -2597,14 +2657,22 @@ document.addEventListener('click', e => {
   if(act==='select-part'){
     const pid=Number(el.dataset.pid)||el.dataset.pid;
     const lid=el.dataset.lid;
-    const lines=S.createLines.map(l=>String(l.id)===String(lid)?{...l,partId:pid}:l);
     const ls={...S._lineSearch}; delete ls[lid];
+    if(String(lid).startsWith('e-')){
+      const lines=(S._editReqLines||[]).map(l=>String(l.id)===String(lid)?{...l,partId:pid}:l);
+      setState({_editReqLines:lines,_lineSearch:ls,_lineDropOpen:''}); return;
+    }
+    const lines=S.createLines.map(l=>String(l.id)===String(lid)?{...l,partId:pid}:l);
     setState({createLines:lines,_lineSearch:ls,_lineDropOpen:''}); return;
   }
   if(act==='clear-part'){
     const lid=el.dataset.lid;
-    const lines=S.createLines.map(l=>String(l.id)===String(lid)?{...l,partId:''}:l);
     const ls={...S._lineSearch}; ls[lid]='';
+    if(String(lid).startsWith('e-')){
+      const lines=(S._editReqLines||[]).map(l=>String(l.id)===String(lid)?{...l,partId:''}:l);
+      setState({_editReqLines:lines,_lineSearch:ls,_lineDropOpen:lid}); return;
+    }
+    const lines=S.createLines.map(l=>String(l.id)===String(lid)?{...l,partId:''}:l);
     setState({createLines:lines,_lineSearch:ls,_lineDropOpen:lid}); return;
   }
   if(act==='clear-part-search'){
@@ -2620,9 +2688,24 @@ document.addEventListener('click', e => {
   }
   if(act==='remove-line'||act==='del-line'){
     const lid=el.dataset.lid||id;
+    if(String(lid).startsWith('e-')){
+      if((S._editReqLines||[]).length>1) setState({_editReqLines:(S._editReqLines||[]).filter(l=>String(l.id)!==lid)});
+      return;
+    }
     if(S.createLines.length>1){ setState({createLines:S.createLines.filter(l=>String(l.id)!==lid)}); }
     return;
   }
+  if(act==='edit-add-line'){
+    const lines=[...(S._editReqLines||[]),{id:'e-'+Date.now(),partId:'',qty:1,location:S.locations[0]||''}];
+    setState({_editReqLines:lines}); return;
+  }
+  if(act==='open-edit-req'){
+    const req=S.reqs.find(r=>r.id===id);
+    if(!req||req.status!=='pending') return;
+    const lines=(req.items||[]).map((it,i)=>({id:'e-'+(i+1),partId:it.partId,qty:it.qty,location:it.location||S.locations[0]||''}));
+    setState({_editReqId:id,_editReqLines:lines.length>0?lines:[{id:'e-1',partId:'',qty:1,location:S.locations[0]||''}],_editReqErr:null,modal:{type:'edit-req',reqId:id}}); return;
+  }
+  if(act==='do-save-edit-req'){ doSaveEditReq(); return; }
   if(act==='confirm-submit'||act==='confirm-submit-req'){ doValidateCreate(); return; }
   if(act==='do-submit'||act==='do-submit-req'){ doSubmitReq(); return; }
 
@@ -2763,16 +2846,28 @@ document.addEventListener('change', e => {
   if(el.id==='c-job'){ S.createJob=el.value; return; }
   // line-part: update partId
   if(act==='line-part'&&lid){
+    if(String(lid).startsWith('e-')){
+      const lines=(S._editReqLines||[]).map(l=>String(l.id)===lid?{...l,partId:Number(el.value)||el.value}:l);
+      setState({_editReqLines:lines}); return;
+    }
     const lines=S.createLines.map(l=>String(l.id)===lid?{...l,partId:Number(el.value)||el.value}:l);
     setState({createLines:lines}); return;
   }
   // line-qty: update qty
   if(act==='line-qty'&&lid){
+    if(String(lid).startsWith('e-')){
+      const lines=(S._editReqLines||[]).map(l=>String(l.id)===lid?{...l,qty:Math.max(0,parseFloat(el.value)||0)}:l);
+      setState({_editReqLines:lines}); return;
+    }
     const lines=S.createLines.map(l=>String(l.id)===lid?{...l,qty:Math.max(0,parseFloat(el.value)||0)}:l);
     setState({createLines:lines}); return;
   }
   // line-loc: update location
   if(act==='line-loc'&&lid){
+    if(String(lid).startsWith('e-')){
+      const lines=(S._editReqLines||[]).map(l=>String(l.id)===lid?{...l,location:el.value}:l);
+      setState({_editReqLines:lines}); return;
+    }
     const lines=S.createLines.map(l=>String(l.id)===lid?{...l,location:el.value}:l);
     setState({createLines:lines}); return;
   }
@@ -3128,6 +3223,33 @@ function doSubmitReq(){
     status:'pending', items, note, ref:ref||'', createdAt:nowISO()
   };
   setState({reqs:[...S.reqs,req],createLines:[{id:1,partId:'',qty:1,location:S.locations[0]||''}],createJob:'',createNote:'',createRef:'',modal:null,_createErr:null,_createOk:`ส่งใบเบิก ${id} แล้ว`});
+}
+
+function doSaveEditReq(){
+  const rid=S._editReqId;
+  const req=S.reqs.find(r=>r.id===rid);
+  if(!req||req.status!=='pending'){ setState({_editReqErr:'ไม่สามารถแก้ไขได้ (สถานะเปลี่ยนแล้ว)'}); return; }
+  const lines=S._editReqLines||[];
+  for(const l of lines){
+    if(!l.partId){ setState({_editReqErr:'กรุณาเลือกสินค้าทุกรายการ'}); return; }
+    if(!(Number(l.qty)>0)){ setState({_editReqErr:'จำนวนต้องมากกว่า 0'}); return; }
+  }
+  const jobId=document.getElementById('er-job')?.value||'';
+  const note=(document.getElementById('er-note')?.value||'').trim();
+  const ref=(document.getElementById('er-ref')?.value||'').trim();
+  const job=S.jobs.find(j=>j.id===jobId)||null;
+  const cust=job?S.customers.find(c=>c.id===job.customerId)||null:null;
+  const items=lines.map(l=>({partId:Number(l.partId)||l.partId,qty:Number(l.qty)||l.qty,location:l.location}));
+  const reqs=S.reqs.map(r=>r.id===rid?{
+    ...r,
+    jobId:jobId||null,
+    jobCode:job?.code||'', jobDesc:job?.desc||'',
+    machineId:job?.machineId||'', machineType:job?.machineType||'',
+    custId:cust?.id||'', custName:cust?.name||'',
+    items, note, ref,
+    editedAt:nowISO()
+  }:r);
+  setState({reqs,modal:null,_editReqId:null,_editReqLines:null,_editReqErr:null});
 }
 
 function doApprove(id){
