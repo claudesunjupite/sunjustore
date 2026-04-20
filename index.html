@@ -1783,7 +1783,7 @@ function renderMyReturns(){
   const histTbl=mine.length===0
     ?`<p style="padding:16px;text-align:center;color:#9ca3af;font-size:12px">ยังไม่มีประวัติการคืน</p>`
     :`<div style="overflow-x:auto"><table class="tbl">
-      <thead><tr><th>วันที่แจ้ง</th><th>เลขใบเบิก</th><th>Job / ลูกค้า</th><th>รายการ</th><th class="right">จำนวน</th><th>เหตุผล</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead>
+      <thead><tr><th>วันที่แจ้ง</th><th>เลขใบเบิก</th><th>Job / ลูกค้า</th><th>รายการ</th><th class="right">จำนวน</th><th>เหตุผล</th><th>สถานะ</th><th>หมายเหตุ</th><th></th></tr></thead>
       <tbody>${mine.map(rt=>{
         const p=S.parts.find(x=>x.id===Number(rt.partId)||x.id===rt.partId);
         const req=S.reqs.find(r=>r.id===rt.reqId);
@@ -1800,6 +1800,9 @@ function renderMyReturns(){
             ${rt.approvedBy?`✅ รับทราบ: ${esc(rt.approvedBy)}`:''}
             ${rt.receivedBy?` | 📦 สโตร์รับ: ${esc(rt.receivedBy)}`:''}
             ${rt.rejectedBy?`<span style="color:#dc2626"> ❌ ปฏิเสธ: ${esc(rt.rejectedBy)}</span>`:''}
+          </td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn btn-xs btn-outline-blue" data-action="print-return-slip" data-rid="${esc(rt.id)}" style="padding:2px 7px;font-size:11px">พิมพ์ใบคืน</button>
           </td>
         </tr>`;}).join('')}
       </tbody></table></div>`;
@@ -2755,6 +2758,7 @@ document.addEventListener('click', e => {
   if(act==='job-rpt-back')       { setState({rptJobSel:null}); return; }
 
   // Prints / exports
+  if(act==='print-return-slip')  { doPrintReturnSlip(el.dataset.rid); return; }
   if(act==='print-slip')         { doPrintSlip(id); return; }
   if(act==='view-photo'){
     const rid=el.dataset.rid, idx=Number(el.dataset.idx);
@@ -3502,6 +3506,49 @@ function doPrintSlip(reqId){
       <div>ลงชื่อผู้จ่าย ..............................<br><br>วันที่ ...............</div>
     </div>
     ${(req.photos||[]).length>0?`<div style="margin-top:24px;border-top:1px solid #e5e7eb;padding-top:16px"><p style="font-size:12px;font-weight:700;margin-bottom:10px">📷 รูปภาพประกอบการจ่ายสินค้า</p><div style="display:flex;gap:12px;flex-wrap:wrap">${(req.photos||[]).map(p=>`<img src="${p}" style="width:200px;height:200px;object-fit:cover;border-radius:6px;border:1px solid #e5e7eb">`).join('')}</div></div>`:''}
+  </body></html>`);
+}
+
+// ─── doPrintReturnSlip : พิมพ์ใบคืนสินค้า ────────────────────────────────────
+function doPrintReturnSlip(retId){
+  const rt=S.returns.find(x=>x.id===retId); if(!rt) return;
+  const req=S.reqs.find(r=>r.id===rt.reqId);
+  const p=S.parts.find(x=>x.id===Number(rt.partId)||x.id===rt.partId);
+  const {jobCode,jobDesc,machineId,machineType,custName}=req?reqJobInfo(req):{jobCode:'—',jobDesc:'',machineId:'',machineType:'',custName:'—'};
+  const retSt=RET_STATUS[rt.status]||{label:rt.status};
+  printWin(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>ใบคืนสินค้า ${esc(retId)}</title>${printStyles()}</head><body>
+    ${printHeader('ใบคืนสินค้า / Parts Return Slip')}
+    <div class="info-row">
+      <span><b>เลขที่ใบคืน:</b> ${esc(rt.id)}</span>
+      <span><b>วันที่แจ้งคืน:</b> ${fmtDT(rt.returnedAt)}</span>
+      <span><b>ผู้คืน:</b> ${esc(rt.returnedByName||rt.returnedBy||'')}</span>
+    </div>
+    <div class="info-row">
+      <span><b>อ้างอิงใบเบิก:</b> <strong>${esc(rt.reqId)}</strong></span>
+      <span><b>เลข Job:</b> <strong>${esc(jobCode)}</strong>${jobDesc?' — '+esc(jobDesc):''}</span>
+      <span><b>ลูกค้า:</b> ${esc(custName)}</span>
+      ${machineType?`<span><b>เครื่องจักร:</b> ${esc(machineType)}</span>`:''}
+      ${machineId?`<span><b>รหัสเครื่อง:</b> ${esc(machineId)}</span>`:''}
+    </div>
+    <table><thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวนที่คืน</th><th>หน่วย</th><th>ตำแหน่ง</th><th>เหตุผล</th></tr></thead>
+    <tbody><tr>
+      <td>${esc(p?.code||rt.partCode||'—')}</td>
+      <td>${esc(p?.name||rt.partName||'—')}</td>
+      <td style="text-align:center;font-weight:700">${rt.qty}</td>
+      <td>${esc(p?.unit||rt.partUnit||'')}</td>
+      <td>${esc(rt.location||'—')}</td>
+      <td>${esc(rt.reason||'')}</td>
+    </tr></tbody></table>
+    <div style="margin-top:12px;font-size:12px;color:#374151">
+      <b>สถานะ:</b> ${esc(retSt.label)}
+      ${rt.approvedBy?` &nbsp;|&nbsp; <b>รับทราบโดย:</b> ${esc(rt.approvedBy)} (${fmtDT(rt.approvedAt||'')})`:'' }
+      ${rt.receivedBy?` &nbsp;|&nbsp; <b>สโตร์รับคืน:</b> ${esc(rt.receivedBy)} (${fmtDT(rt.receivedAt||'')})`:'' }
+    </div>
+    <div style="margin-top:32px;display:flex;justify-content:space-between;font-size:12px">
+      <div>ลงชื่อผู้คืน ..............................<br><br>วันที่ ...............</div>
+      <div>ลงชื่อผู้รับทราบ ..............................<br><br>วันที่ ...............</div>
+      <div>ลงชื่อผู้รับคืน (สโตร์) ..............................<br><br>วันที่ ...............</div>
+    </div>
   </body></html>`);
 }
 
