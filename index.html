@@ -2446,27 +2446,46 @@ function renderModal(){
     </div></div>`;
   }
   if(type==='return'){
-    const {reqId}=S.modal;const req=S.reqs.find(r=>r.id===reqId);if(!req) return '';
-    const opts=req.items.map(it=>{
-      const p=S.parts.find(x=>x.id===it.partId);
+    const {reqId}=S.modal; const req=S.reqs.find(r=>r.id===reqId); if(!req) return '';
+    const retLines=S._retLines||[{id:'r-1',partId:'',qty:1,location:S.locations[0]||''}];
+    // สร้าง options สำหรับแต่ละ select (แสดงสถานะถ้าคืนไปแล้ว)
+    const makeOpts=(selPartId)=>req.items.map(it=>{
+      const p=S.parts.find(x=>x.id===Number(it.partId)||x.id===it.partId);
       const pid=Number(it.partId)||it.partId;
       const existing=S.returns.find(r=>r.reqId===reqId&&(Number(r.partId)||r.partId)===pid&&r.status!=='rejected_return');
-      const label=existing?`⚠️ ${esc(p?.name||'—')} — คืนแล้ว (${({pending_return:'รอผู้อนุมัติ',approved_return:'รอสโตร์รับ',completed_return:'รับคืนแล้ว'})[existing.status]||existing.status})`:
-        `${esc(p?.name||'—')} (เบิกไป ${it.qty} ${esc(p?.unit||'')})`;
-      return `<option value="${it.partId}"${existing?' disabled':''} style="${existing?'color:#9ca3af':''}">${label}</option>`;
+      const stLabel=existing?` [${({pending_return:'รอผู้อนุมัติ',approved_return:'รอสโตร์รับ',completed_return:'รับคืนแล้ว'})[existing.status]||'คืนแล้ว'}]`:'';
+      const label=`${esc(p?.name||'—')} — เบิกไป ${it.qty} ${esc(p?.unit||'')}${stLabel}`;
+      const sel=String(selPartId)===String(it.partId);
+      return `<option value="${it.partId}"${sel?' selected':''}${existing?' style="color:#9ca3af"':''}>${label}</option>`;
     }).join('');
-    return `<div class="modal-backdrop"><div class="modal">
+    const lineBoxes=retLines.map((l,i)=>`
+      <div class="line-box" style="margin-bottom:8px">
+        <div class="line-box-hdr">
+          <span class="text-sm font-bold text-gray">รายการที่ ${i+1}</span>
+          ${retLines.length>1?`<button class="btn btn-sm btn-outline-red" data-action="ret-del-line" data-lid="${l.id}">✕ ลบ</button>`:''}
+        </div>
+        <div class="grid-2" style="gap:6px">
+          <div style="grid-column:span 2"><label class="field-label">รายการที่คืน *</label>
+            <select class="input input-sm" id="rp-${l.id}">${makeOpts(l.partId)}</select></div>
+          <div><label class="field-label">จำนวนที่คืน *</label>
+            <input class="input input-sm" id="rq-${l.id}" type="number" min="1" value="${l.qty}"></div>
+          <div><label class="field-label">ตำแหน่ง</label>
+            <select class="input input-sm" id="rl-${l.id}">
+              ${S.locations.map(loc=>`<option${l.location===loc?' selected':''}>${esc(loc)}</option>`).join('')}
+            </select></div>
+          <div style="grid-column:span 2"><label class="field-label">เหตุผล * (บังคับ)</label>
+            <input class="input input-sm" id="rr-${l.id}" placeholder="เช่น เบิกเกิน / ผิดรุ่น / เสียหาย" value="${esc(l.reason||'')}"></div>
+        </div>
+      </div>`).join('');
+    return `<div class="modal-backdrop"><div class="modal" style="max-width:520px;max-height:90vh;overflow-y:auto">
       <div class="modal-title">🔄 แจ้งคืนสินค้า</div>
-      <p class="text-sm text-gray" style="margin-bottom:12px">ใบเบิก ${esc(reqId)}</p>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div><label class="field-label">รายการที่คืน *</label><select class="input" id="ret-part">${opts}</select></div>
-        <div><label class="field-label">จำนวนที่คืน *</label><input class="input" id="ret-qty" type="number" min="1" value="1"></div>
-        <div><label class="field-label">ตำแหน่ง *</label><select class="input" id="ret-loc">${S.locations.map(l=>`<option>${esc(l)}</option>`).join('')}</select></div>
-        <div><label class="field-label">เหตุผล * (บังคับ)</label><input class="input" id="ret-note" placeholder="เช่น เบิกเกิน / ผิดรุ่น / เสียหาย"></div>
-      </div>
+      <p class="text-sm text-gray" style="margin-bottom:12px">ใบเบิก <strong>${esc(reqId)}</strong> — สามารถคืนหลายรายการพร้อมกันได้</p>
+      ${S._retErr?`<div class="err" style="margin-bottom:8px">⚠️ ${esc(S._retErr)}</div>`:''}
+      ${lineBoxes}
+      <button class="btn btn-sm btn-outline-blue" style="width:100%;margin-bottom:12px" data-action="ret-add-line">+ เพิ่มรายการคืน</button>
       <div class="modal-footer">
         <button class="btn btn-outline" data-action="modal-cancel">ยกเลิก</button>
-        <button class="btn btn-orange" data-action="do-return" data-id="${reqId}">📤 ส่งคำขอคืน</button>
+        <button class="btn btn-orange" data-action="do-return" data-id="${reqId}">📤 ส่งคำขอคืนทั้งหมด</button>
       </div>
     </div></div>`;
   }
@@ -2725,7 +2744,25 @@ document.addEventListener('click', e => {
   if(act==='issue-req'||act==='issue'){ doIssue(id); return; }
 
   // Return
-  if(act==='open-return')    { setState({modal:{type:'return',reqId:id}}); return; }
+  if(act==='open-return'){
+    const req=S.reqs.find(r=>r.id===id); if(!req) return;
+    // หา item แรกที่ยังไม่ได้คืน
+    const firstAvail=req.items.find(it=>{
+      const pid=Number(it.partId)||it.partId;
+      return !S.returns.find(r=>r.reqId===id&&(Number(r.partId)||r.partId)===pid&&r.status!=='rejected_return');
+    });
+    const initLine={id:'r-1', partId:firstAvail?String(firstAvail.partId):'', qty:1, location:S.locations[0]||''};
+    setState({modal:{type:'return',reqId:id}, _retLines:[initLine]}); return;
+  }
+  if(act==='ret-add-line'){
+    const lines=[...(S._retLines||[]),{id:'r-'+Date.now(),partId:'',qty:1,location:S.locations[0]||''}];
+    setState({_retLines:lines}); return;
+  }
+  if(act==='ret-del-line'){
+    const lid=el.dataset.lid;
+    if((S._retLines||[]).length>1) setState({_retLines:(S._retLines||[]).filter(l=>l.id!==lid)});
+    return;
+  }
   if(act==='do-return')      { doReturn(id); return; }
   if(act==='approve-return') { doApproveReturn(id); return; }
   if(act==='reject-return')  { doRejectReturn(id); return; }
@@ -3294,33 +3331,39 @@ function doIssue(id){
 }
 
 function doReturn(reqId){
-  const partId=document.getElementById('ret-part')?.value;
-  const qty   =parseInt(document.getElementById('ret-qty') ?.value||'0',10);
-  const loc   =document.getElementById('ret-loc') ?.value||'';
-  const reason=(document.getElementById('ret-note')?.value||'').trim();
-  if(!partId||qty<1){ alert('กรุณาเลือกสินค้าและจำนวนที่คืน'); return; }
-  if(!reason){ alert('กรุณาระบุเหตุผลการคืน'); return; }
-  // Block duplicate: same req + same part, with active/completed return already
-  const pid=Number(partId)||partId;
-  const existing=S.returns.find(r=>r.reqId===reqId&&(Number(r.partId)||r.partId)===pid&&r.status!=='rejected_return');
-  if(existing){
-    const st={pending_return:'รอผู้อนุมัติ',approved_return:'รอสโตร์รับ',completed_return:'รับคืนแล้ว'}[existing.status]||existing.status;
-    alert(`รายการนี้มีคำขอคืนอยู่แล้ว (สถานะ: ${st})\nไม่สามารถแจ้งคืนซ้ำได้`);
-    return;
+  const lines=S._retLines||[];
+  const newRets=[];
+  const usedPids=new Set();
+  for(const l of lines){
+    const partId=document.getElementById('rp-'+l.id)?.value||'';
+    const qty   =parseInt(document.getElementById('rq-'+l.id)?.value||'0',10);
+    const loc   =document.getElementById('rl-'+l.id)?.value||'';
+    const reason=(document.getElementById('rr-'+l.id)?.value||'').trim();
+    if(!partId||qty<1){ setState({_retErr:'กรุณาเลือกสินค้าและจำนวนที่คืนทุกรายการ'}); return; }
+    if(!reason){ setState({_retErr:'กรุณาระบุเหตุผลทุกรายการ'}); return; }
+    const pid=Number(partId)||partId;
+    // ซ้ำในรายการที่กรอก
+    if(usedPids.has(pid)){ setState({_retErr:'มีสินค้าซ้ำกันในรายการคืน'}); return; }
+    usedPids.add(pid);
+    // มีคืนค้างอยู่ใน DB แล้ว
+    const existing=S.returns.find(r=>r.reqId===reqId&&(Number(r.partId)||r.partId)===pid&&r.status!=='rejected_return');
+    if(existing){
+      const st={pending_return:'รอผู้อนุมัติ',approved_return:'รอสโตร์รับ',completed_return:'รับคืนแล้ว'}[existing.status]||existing.status;
+      setState({_retErr:`"${S.parts.find(p=>p.id===pid)?.name||partId}" มีคำขอคืนอยู่แล้ว (${st})`}); return;
+    }
+    const part=S.parts.find(p=>p.id===Number(partId)||p.id===partId);
+    newRets.push({
+      id:genId('RET'), reqId, partId:pid,
+      partName:part?.name||'', partUnit:part?.unit||'',
+      qty, location:loc, reason,
+      returnedBy:S.user.id||S.user.name, returnedByName:S.user.name,
+      returnedAt:nowISO(),
+      status:'pending_return',
+      approvedBy:null, approvedAt:null,
+      receivedBy:null, receivedAt:null,
+    });
   }
-  const part=S.parts.find(p=>p.id===Number(partId)||p.id===partId);
-  // Create PENDING return — stock NOT updated yet (will update when store receives)
-  const ret={
-    id:genId('RET'),reqId,partId:Number(partId)||partId,
-    partName:part?.name||'',partUnit:part?.unit||'',
-    qty,location:loc,reason,
-    returnedBy:S.user.id||S.user.name,returnedByName:S.user.name,
-    returnedAt:nowISO(),
-    status:'pending_return',
-    approvedBy:null,approvedAt:null,
-    receivedBy:null,receivedAt:null,
-  };
-  setState({returns:[...S.returns,ret],modal:null});
+  setState({returns:[...S.returns,...newRets], modal:null, _retLines:null, _retErr:null});
 }
 
 function doApproveReturn(id){
