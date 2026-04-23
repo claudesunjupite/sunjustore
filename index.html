@@ -2710,7 +2710,7 @@ document.addEventListener('click', e => {
     const lid=el.dataset.lid, pid=el.dataset.pid;
     const adjLines=(S._adjLines||[]).map(l=>l.id===lid?{...l,partId:Number(pid)||pid}:l);
     const sm={...(S._adjSearchMap||{})}; delete sm[lid];
-    setState({_adjLines:adjLines,_adjSearchMap:sm,_adjDropOpenId:''}); return;
+    setState({_adjLines:adjLines,_adjSearchMap:sm,_adjDropOpenId:'',_adjErr:null}); return;
   }
   if(act==='adj-clear-part'){
     const lid=el.dataset.lid;
@@ -2899,6 +2899,7 @@ document.addEventListener('input', e => {
     const lid=el.dataset.lid, q=el.value;
     const sm={...(S._adjSearchMap||{})}; sm[lid]=q;
     S._adjSearchMap=sm; S._adjDropOpenId=q.length>0?lid:'';
+    S._adjErr=null;
     setState({});
     return;
   }
@@ -3189,16 +3190,15 @@ function doAdjustStock(){
   for(let i=0;i<lines.length;i++){
     const l=lines[i];
     const no=i+1;
-    const pId=Number(l.partId)||0;
-    if(!pId){ setState({_adjErr:`รายการที่ ${no}: กรุณาเลือกสินค้า`}); return; }
+    if(!l.partId&&l.partId!==0){ setState({_adjErr:`รายการที่ ${no}: กรุณาเลือกสินค้า`}); return; }
+    const part=S.parts.find(p=>p.id===l.partId||p.id===Number(l.partId)||String(p.id)===String(l.partId));
+    if(!part){ setState({_adjErr:`รายการที่ ${no}: กรุณาเลือกสินค้า`}); return; }
     const qty=parseInt(l.qty||'0',10);
     const note=(l.note||'').trim();
     if(!note){ setState({_adjErr:`รายการที่ ${no}: กรุณาระบุหมายเหตุ`}); return; }
     if(isNaN(qty)||qty<0){ setState({_adjErr:`รายการที่ ${no}: กรุณาระบุจำนวน`}); return; }
     if(l.type!=='set'&&qty===0){ setState({_adjErr:`รายการที่ ${no}: จำนวนต้องมากกว่า 0`}); return; }
-    const part=S.parts.find(p=>p.id===pId);
-    if(!part){ setState({_adjErr:`รายการที่ ${no}: ไม่พบสินค้าในระบบ`}); return; }
-    prepared.push({l,pId,qty,note,part});
+    prepared.push({l,pId:part.id,qty,note,part});
   }
 
   // build confirm summary
