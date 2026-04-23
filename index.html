@@ -1090,6 +1090,64 @@ function renderAdminStockAdd(){
 }
 
 function renderAdminStockAdjust(){
+  if(!S._adjLines||S._adjLines.length===0) S._adjLines=[{id:'adj-1',partId:null,type:'add',qty:'',note:''}];
+  const lines=S._adjLines;
+  const sm=S._adjSearchMap||{};
+  const dropId=S._adjDropOpenId||'';
+
+  const renderAdjLine=(l,idx)=>{
+    const part=l.partId?S.parts.find(p=>p.id===l.partId||p.id===Number(l.partId)):null;
+    const q=(sm[l.id]||'').toLowerCase();
+    const open=dropId===l.id&&q.length>0;
+    const matches=open?S.parts.filter(p=>
+      ((p.code||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q))
+    ).slice(0,30):[];
+    const drop=open?`<div class="part-dropdown">
+      ${matches.length===0
+        ?`<div style="padding:12px 16px;color:#9ca3af;font-size:12px;text-align:center">ไม่พบสินค้า "${esc(q)}"</div>`
+        :matches.map(p=>{
+            const warn=p.stock<(p.minStock||STOCK_WARN_LEVEL);
+            const hCode=esc(p.code).replace(new RegExp(esc(q),'gi'),m=>`<mark style="background:#fef08a;padding:0">${m}</mark>`);
+            const hName=esc(p.name).replace(new RegExp(esc(q),'gi'),m=>`<mark style="background:#fef08a;padding:0">${m}</mark>`);
+            return `<div class="part-option" data-action="adj-select-part" data-lid="${l.id}" data-pid="${p.id}">
+              <span class="po-code">${hCode}</span><span class="po-name">${hName}</span>
+              <span class="po-stock ${warn?'po-warn':''}">${warn?'⚠️ ':''}${p.stock} ${esc(p.unit)}</span>
+            </div>`;
+          }).join('')}
+    </div>`:'';
+    const partInput=part
+      ?`<div style="display:flex;gap:6px;align-items:center">
+          <div class="input" style="flex:1;background:#f0fdf4;border-color:#86efac;font-size:13px;padding:6px 10px">
+            <span class="font-mono" style="font-size:11px;color:#6b7280">${esc(part.code)}</span> — ${esc(part.name)}
+            <span style="color:#6b7280;font-size:11px;margin-left:6px">(คงเหลือ: <b>${part.stock}</b> ${esc(part.unit)})</span>
+          </div>
+          <button class="btn btn-sm btn-outline-red" data-action="adj-clear-part" data-lid="${l.id}">✕</button>
+        </div>`
+      :`<div style="position:relative">
+          <input class="input" placeholder="🔍 พิมพ์รหัสหรือชื่อสินค้า..." value="${esc(sm[l.id]||'')}" data-action="adj-part-search" data-lid="${l.id}" autocomplete="off">
+          ${drop}
+        </div>`;
+    return `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:10px;background:#f9fafb">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:600;color:#6b7280">รายการที่ ${idx+1}</span>
+        ${lines.length>1?`<button class="btn btn-sm btn-outline-red" data-action="adj-del-line" data-lid="${l.id}">🗑️ ลบ</button>`:''}
+      </div>
+      <div class="grid-2" style="gap:8px">
+        <div style="grid-column:1/-1"><label class="field-label">สินค้า *</label>${partInput}</div>
+        <div><label class="field-label">ประเภท *</label>
+          <select class="input" data-action="adj-line-type" data-lid="${l.id}">
+            <option value="add"${l.type==='add'?' selected':''}>เพิ่มสต็อก (+)</option>
+            <option value="sub"${l.type==='sub'?' selected':''}>ลดสต็อก (-)</option>
+            <option value="set"${l.type==='set'?' selected':''}>กำหนดใหม่ (=)</option>
+          </select></div>
+        <div><label class="field-label">จำนวน *</label>
+          <input class="input" type="number" min="0" placeholder="0" value="${esc(l.qty||'')}" data-action="adj-line-qty" data-lid="${l.id}"></div>
+        <div style="grid-column:1/-1"><label class="field-label">หมายเหตุ * (บังคับ)</label>
+          <input class="input" placeholder="เช่น ซื้อเพิ่ม PO#123 / สินค้าสูญหาย" value="${esc(l.note||'')}" data-action="adj-line-note" data-lid="${l.id}"></div>
+      </div>
+    </div>`;
+  };
+
   return `<div class="card">
     <div class="card-hdr">
       <span class="card-hdr-title">🔧 ปรับปรุงสต็อก</span>
@@ -1098,25 +1156,12 @@ function renderAdminStockAdjust(){
     <div class="section">
       ${S._adjErr?`<div class="err">⚠️ ${esc(S._adjErr)}</div>`:''}
       ${S._adjOk?`<div class="succ">${esc(S._adjOk)}</div>`:''}
-      <div class="info-box info-amber">⚠️ การปรับสต็อกจะถูกบันทึกในประวัติ (admin เท่านั้นที่เห็น) ต้องระบุหมายเหตุทุกครั้ง</div>
-      <div class="grid-2">
-        <div><label class="field-label">สินค้า *</label>
-          <select class="input" id="adj-part">
-            <option value="">— เลือกสินค้า —</option>
-            ${S.parts.map(p=>`<option value="${p.id}">${esc(p.code)} — ${esc(p.name)} (คงเหลือ: ${p.stock} ${esc(p.unit)})</option>`).join('')}
-          </select></div>
-        <div><label class="field-label">ประเภทการปรับ *</label>
-          <select class="input" id="adj-type">
-            <option value="set">กำหนดจำนวนใหม่ (ตั้งค่า)</option>
-            <option value="add">เพิ่มสต็อก (+)</option>
-            <option value="sub">ลดสต็อก (-)</option>
-          </select></div>
-        <div><label class="field-label">จำนวน *</label>
-          <input class="input" id="adj-qty" type="number" min="0" placeholder="0"></div>
-        <div style="grid-column:span 1"><label class="field-label">หมายเหตุ * (อ้างอิงได้)</label>
-          <input class="input" id="adj-note" placeholder="เช่น ซื้อเพิ่ม PO#123 / ปรับปรุงสต็อกประจำปี / สินค้าสูญหาย"></div>
+      <div class="info-box info-amber">⚠️ การปรับสต็อกจะบันทึกในประวัติ (admin เท่านั้น) ต้องระบุหมายเหตุทุกครั้ง</div>
+      ${lines.map((l,i)=>renderAdjLine(l,i)).join('')}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <button class="btn btn-outline-blue" data-action="adj-add-line">➕ เพิ่มรายการ</button>
+        <button class="btn btn-orange" data-action="do-adjust-stock">🔧 ยืนยันปรับสต็อก${lines.length>1?` (${lines.length} รายการ)`:''}</button>
       </div>
-      <div><button class="btn btn-orange" data-action="do-adjust-stock">🔧 ยืนยันปรับสต็อก</button></div>
     </div>
   </div>`;
 }
@@ -2661,6 +2706,27 @@ document.addEventListener('click', e => {
   if(act==='save-edit-part')  { doSaveEditPart(id); return; }
   if(act==='adjust-stock')    { doAdjustStock(); return; }
   if(act==='do-adjust-stock')  { doAdjustStock(); return; }
+  if(act==='adj-select-part'){
+    const lid=el.dataset.lid, pid=el.dataset.pid;
+    const adjLines=(S._adjLines||[]).map(l=>l.id===lid?{...l,partId:Number(pid)||pid}:l);
+    const sm={...(S._adjSearchMap||{})}; delete sm[lid];
+    setState({_adjLines:adjLines,_adjSearchMap:sm,_adjDropOpenId:''}); return;
+  }
+  if(act==='adj-clear-part'){
+    const lid=el.dataset.lid;
+    const adjLines=(S._adjLines||[]).map(l=>l.id===lid?{...l,partId:null}:l);
+    setState({_adjLines:adjLines}); return;
+  }
+  if(act==='adj-add-line'){
+    const adjLines=S._adjLines||[];
+    setState({_adjLines:[...adjLines,{id:'adj-'+Date.now(),partId:null,type:'add',qty:'',note:''}],_adjErr:null}); return;
+  }
+  if(act==='adj-del-line'){
+    const lid=el.dataset.lid;
+    let adjLines=(S._adjLines||[]).filter(l=>l.id!==lid);
+    if(adjLines.length===0) adjLines=[{id:'adj-1',partId:null,type:'add',qty:'',note:''}];
+    setState({_adjLines:adjLines,_adjErr:null}); return;
+  }
 
   // Jobs
   if(act==='open-job')    { doOpenJob(); return; }
@@ -2829,6 +2895,23 @@ document.addEventListener('input', e => {
     setState({_lineSearch:ls,_lineDropOpen:q.length>0?lid:''});
     return;
   }
+  if(act==='adj-part-search'){
+    const lid=el.dataset.lid, q=el.value;
+    const sm={...(S._adjSearchMap||{})}; sm[lid]=q;
+    S._adjSearchMap=sm; S._adjDropOpenId=q.length>0?lid:'';
+    setState({});
+    return;
+  }
+  if(act==='adj-line-qty'){
+    const lid=el.dataset.lid;
+    S._adjLines=(S._adjLines||[]).map(l=>l.id===lid?{...l,qty:el.value}:l);
+    return;
+  }
+  if(act==='adj-line-note'){
+    const lid=el.dataset.lid;
+    S._adjLines=(S._adjLines||[]).map(l=>l.id===lid?{...l,note:el.value}:l);
+    return;
+  }
   if(act==='line-qty'&&lid){
     // อัปเดต state โดยไม่ re-render เพื่อให้พิมพ์ได้ต่อเนื่อง
     S.createLines=S.createLines.map(l=>String(l.id)===lid?{...l,qty:el.value}:l);
@@ -2888,6 +2971,10 @@ document.addEventListener('change', e => {
   // Create req: job select — save to state so re-render keeps selection
   if(el.id==='c-job'){ S.createJob=el.value; return; }
   // line-part: update partId
+  if(act==='adj-line-type'&&lid){
+    const adjLines=(S._adjLines||[]).map(l=>l.id===lid?{...l,type:el.value}:l);
+    setState({_adjLines:adjLines}); return;
+  }
   if(act==='line-part'&&lid){
     if(String(lid).startsWith('e-')){
       const lines=(S._editReqLines||[]).map(l=>String(l.id)===lid?{...l,partId:Number(el.value)||el.value}:l);
@@ -3094,27 +3181,60 @@ function doSaveEditPart(id){
 
 
 function doAdjustStock(){
-  const pId  = parseInt(document.getElementById('adj-part')?.value||'0',10);
-  const type = document.getElementById('adj-type')?.value||'add';
-  const qty  = parseInt(document.getElementById('adj-qty')?.value||'0',10);
-  const note =(document.getElementById('adj-note')?.value||'').trim();
-  if(!pId){ setState({_adjErr:'กรุณาเลือกสินค้า'}); return; }
-  if(!note){ setState({_adjErr:'กรุณาระบุหมายเหตุ (บังคับ)'}); return; }
-  if(isNaN(qty)||qty<0){ setState({_adjErr:'กรุณาระบุจำนวน'}); return; }
-  if(type!=='set'&&qty===0){ setState({_adjErr:'จำนวนต้องมากกว่า 0'}); return; }
-  const part=S.parts.find(p=>p.id===pId);
-  if(!part){ setState({_adjErr:'ไม่พบสินค้า'}); return; }
-  const prevStock=part.stock;
-  let newStock,delta;
-  if(type==='set'){ newStock=qty; delta=qty-prevStock; }
-  else if(type==='add'){ newStock=prevStock+qty; delta=qty; }
-  else { newStock=Math.max(0,prevStock-qty); delta=newStock-prevStock; }
-  if(!confirm(`ยืนยันปรับสต็อก "${part.name}"\nจาก ${prevStock} → ${newStock} ${part.unit}\nหมายเหตุ: ${note}`)) return;
-  const log={id:genId('LOG'),partId:pId,partCode:part.code,partName:part.name,prevStock,newStock,delta,type,note,by:S.user.name,at:nowISO()};
-  const parts=S.parts.map(p=>p.id===pId?{...p,stock:newStock}:p);
-  setState({parts,stockLog:[...S.stockLog,log],_adjErr:null,_adjOk:`✅ ปรับสต็อก "${part.name}" จาก ${prevStock} → ${newStock} ${part.unit}`,adminStockTab:'log'});
-  document.getElementById('adj-note').value='';
-  document.getElementById('adj-qty').value='';
+  const lines=S._adjLines||[];
+  if(lines.length===0){ setState({_adjErr:'ไม่มีรายการ'}); return; }
+
+  // validate all lines
+  const prepared=[];
+  for(let i=0;i<lines.length;i++){
+    const l=lines[i];
+    const no=i+1;
+    const pId=Number(l.partId)||0;
+    if(!pId){ setState({_adjErr:`รายการที่ ${no}: กรุณาเลือกสินค้า`}); return; }
+    const qty=parseInt(l.qty||'0',10);
+    const note=(l.note||'').trim();
+    if(!note){ setState({_adjErr:`รายการที่ ${no}: กรุณาระบุหมายเหตุ`}); return; }
+    if(isNaN(qty)||qty<0){ setState({_adjErr:`รายการที่ ${no}: กรุณาระบุจำนวน`}); return; }
+    if(l.type!=='set'&&qty===0){ setState({_adjErr:`รายการที่ ${no}: จำนวนต้องมากกว่า 0`}); return; }
+    const part=S.parts.find(p=>p.id===pId);
+    if(!part){ setState({_adjErr:`รายการที่ ${no}: ไม่พบสินค้าในระบบ`}); return; }
+    prepared.push({l,pId,qty,note,part});
+  }
+
+  // build confirm summary
+  const summary=prepared.map(({l,part,qty},i)=>{
+    const prev=part.stock;
+    const nxt=l.type==='set'?qty:l.type==='add'?prev+qty:Math.max(0,prev-qty);
+    const arrow=l.type==='add'?`+${qty}`:l.type==='sub'?`-${qty}`:`=${qty}`;
+    return `${i+1}. ${part.name} (${arrow}) : ${prev} → ${nxt} ${part.unit}`;
+  }).join('\n');
+  if(!confirm(`ยืนยันปรับสต็อก ${prepared.length} รายการ:\n\n${summary}`)) return;
+
+  // apply all
+  let parts=[...S.parts];
+  const newLogs=[];
+  const at=nowISO();
+  for(const {l,pId,qty,note,part} of prepared){
+    const cur=parts.find(p=>p.id===pId);
+    const prevStock=cur?cur.stock:part.stock;
+    let newStock,delta;
+    if(l.type==='set'){ newStock=qty; delta=qty-prevStock; }
+    else if(l.type==='add'){ newStock=prevStock+qty; delta=qty; }
+    else { newStock=Math.max(0,prevStock-qty); delta=newStock-prevStock; }
+    parts=parts.map(p=>p.id===pId?{...p,stock:newStock}:p);
+    newLogs.push({id:genId('LOG'),partId:pId,partCode:part.code,partName:part.name,prevStock,newStock,delta,type:l.type,note,by:S.user.name,at});
+  }
+
+  setState({
+    parts,
+    stockLog:[...S.stockLog,...newLogs],
+    _adjErr:null,
+    _adjOk:`✅ ปรับสต็อกเรียบร้อย ${prepared.length} รายการ`,
+    adminStockTab:'log',
+    _adjLines:[{id:'adj-1',partId:null,type:'add',qty:'',note:''}],
+    _adjSearchMap:{},
+    _adjDropOpenId:''
+  });
 }
 
 function doDelPart(id){
