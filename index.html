@@ -3790,7 +3790,27 @@ function doPrintJob(jobId){
     </div>
     <table><thead><tr><th>รหัส</th><th>ชื่อสินค้า</th><th>จำนวน</th><th>หน่วย</th><th colspan="3">ตำแหน่ง</th></tr></thead>
     <tbody>${tbl||'<tr><td colspan="7" style="text-align:center;color:#9ca3af">ไม่มีรายการ</td></tr>'}</tbody></table>
-    <p style="margin-top:10px;font-size:11px;color:#6b7280">พิมพ์โดย ${esc(S.user.name)} เมื่อ ${fmtDT(nowISO())}</p>
+    <div style="margin-top:40px;display:flex;justify-content:space-between;font-size:12px;padding:0 8px">
+      <div style="text-align:center">
+        <div style="margin-bottom:40px">ลงชื่อผู้เบิก</div>
+        <div>.........................................</div>
+        <div style="margin-top:4px">(............................................)</div>
+        <div style="margin-top:4px">วันที่ ............../............../............</div>
+      </div>
+      <div style="text-align:center">
+        <div style="margin-bottom:40px">ลงชื่อผู้อนุมัติ</div>
+        <div>.........................................</div>
+        <div style="margin-top:4px">(............................................)</div>
+        <div style="margin-top:4px">วันที่ ............../............../............</div>
+      </div>
+      <div style="text-align:center">
+        <div style="margin-bottom:40px">ลงชื่อผู้จ่าย (สโตร์)</div>
+        <div>.........................................</div>
+        <div style="margin-top:4px">(............................................)</div>
+        <div style="margin-top:4px">วันที่ ............../............../............</div>
+      </div>
+    </div>
+    <p style="margin-top:16px;font-size:10px;color:#9ca3af;text-align:right">พิมพ์โดย ${esc(S.user.name)} เมื่อ ${fmtDT(nowISO())}</p>
   </body></html>`);
 }
 
