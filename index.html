@@ -1769,68 +1769,115 @@ function renderStore(){
 function renderMyReturns(){
   const uid=S.user.id||S.user.name;
   const uname=S.user.name;
-  // Issued reqs belonging to this user
+  const tab=S._retTab||'issued';
+  const PER=20;
+
+  // ── data ──
   const myIssued=S.reqs.filter(r=>r.status==='issued'&&(r.createdBy===uid||r.createdByName===uname))
     .slice().sort((a,b)=>(b.issuedAt||b.createdAt).localeCompare(a.issuedAt||a.createdAt));
-  // My return requests history
   const mine=S.returns.filter(r=>r.returnedBy===uid||r.returnedByName===uname).slice().reverse();
 
-  const issuedCards=myIssued.length===0
-    ?`<div style="text-align:center;color:#9ca3af;padding:20px 0;font-size:12px">ยังไม่มีใบเบิกที่จ่ายแล้ว<br>ใบเบิกสถานะ "จ่ายแล้ว" จะปรากฏที่นี่</div>`
-    :myIssued.map(r=>{
-        const job=S.jobs.find(j=>j.id===r.jobId);
-        const cust=S.customers.find(c=>c.id===job?.customerId);
-        const exp=S.expanded['ret_'+r.id];
-        const pendRets=S.returns.filter(x=>x.reqId===r.id&&(x.status==='pending_return'||x.status==='approved_return'));
-        return `<div style="border:1px solid #bbf7d0;border-radius:8px;margin-bottom:8px;overflow:hidden">
-          <div class="list-item list-item-clickable" data-action="toggle-ret-req" data-id="${r.id}"
-               style="background:#f0fdf4;padding:10px 14px">
-            <div style="flex:1;min-width:0">
-              <div class="row gap-2 items-center" style="flex-wrap:wrap">
-                <span class="font-mono font-bold" style="font-size:13px">${esc(r.id)}</span>
-                <span class="text-xs text-gray">${fmtDT(r.issuedAt||r.createdAt)}</span>
-                ${badge('จ่ายแล้ว','bg-green')}
-                ${pendRets.length>0?`<span class="badge bg-yellow" style="font-size:10px">⏳ รอดำเนินการ ${pendRets.length}</span>`:''}
-              </div>
-              <div class="row gap-1" style="margin-top:5px;flex-wrap:wrap">
-                ${job?badge('📋 '+job.code,'bg-indigo'):''}
-                ${cust?badge(cust.name,'bg-rose'):''}
-                ${job?.machineType?badge(job.machineType,'bg-gray'):''}
-                ${job?.machineId?badge(job.machineId,'bg-teal'):''}
-                <span class="text-xs text-gray">${r.items.length} รายการ</span>
-              </div>
-            </div>
-            <div class="row gap-2 items-center" style="margin-left:8px">
-              <button class="btn btn-sm btn-orange" data-action="open-return" data-id="${r.id}"
-                      style="white-space:nowrap;font-weight:700">
-                🔄 แจ้งคืนสินค้า
-              </button>
-              <button class="btn btn-sm btn-outline-purple" data-action="print-slip" data-id="${r.id}"
-                      style="white-space:nowrap">🖨️ พิมพ์</button>
-              <span style="color:#d1d5db;font-size:16px">${exp?'▲':'▼'}</span>
-            </div>
-          </div>
-          ${exp?`<div style="padding:10px 14px;background:#fff;border-top:1px solid #d1fae5">
-            <table class="tbl" style="margin:0">
-              <thead><tr><th>รายการ</th><th>รหัส</th><th class="right">จำนวน</th><th>หน่วย</th><th>ตำแหน่ง</th></tr></thead>
-              <tbody>${r.items.map(it=>{const p=S.parts.find(x=>x.id===Number(it.partId)||x.id===it.partId);
-                return `<tr>
-                  <td>${esc(p?.name||'—')}</td>
-                  <td class="font-mono" style="font-size:11px">${esc(p?.code||'—')}</td>
-                  <td class="right">${it.qty}</td><td>${esc(p?.unit||'—')}</td>
-                  <td>${esc(it.location||'—')}</td>
-                </tr>`;}).join('')}
-              </tbody>
-            </table>
-          </div>`:''}
-        </div>`;
-      }).join('');
+  // ── tab bar ──
+  const tabBar=`<div style="display:flex;border-bottom:2px solid #e5e7eb;margin-bottom:0">
+    <button data-action="ret-tab" data-val="issued"
+      style="flex:1;padding:11px 8px;border:none;cursor:pointer;font-size:13px;font-weight:600;
+             background:${tab==='issued'?'#fff':'#f9fafb'};
+             color:${tab==='issued'?'#15803d':'#6b7280'};
+             border-bottom:${tab==='issued'?'2px solid #16a34a':'2px solid transparent'};
+             margin-bottom:-2px;transition:all .15s">
+      📦 ใบเบิกที่จ่ายแล้ว <span style="background:${tab==='issued'?'#dcfce7':'#e5e7eb'};color:${tab==='issued'?'#15803d':'#6b7280'};border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px">${myIssued.length}</span>
+    </button>
+    <button data-action="ret-tab" data-val="history"
+      style="flex:1;padding:11px 8px;border:none;cursor:pointer;font-size:13px;font-weight:600;
+             background:${tab==='history'?'#fff':'#f9fafb'};
+             color:${tab==='history'?'#2563eb':'#6b7280'};
+             border-bottom:${tab==='history'?'2px solid #2563eb':'2px solid transparent'};
+             margin-bottom:-2px;transition:all .15s">
+      📋 ประวัติการแจ้งคืน <span style="background:${tab==='history'?'#dbeafe':'#e5e7eb'};color:${tab==='history'?'#1d4ed8':'#6b7280'};border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px">${mine.length}</span>
+    </button>
+  </div>`;
 
-  const histTbl=mine.length===0
-    ?`<p style="padding:16px;text-align:center;color:#9ca3af;font-size:12px">ยังไม่มีประวัติการคืน</p>`
+  // ── pager helper ──
+  const pager=(total,page,pageAction)=>{
+    const pages=Math.ceil(total/PER); if(pages<=1) return '';
+    let btns='';
+    if(page>0) btns+=`<button class="btn btn-sm btn-outline" data-action="${pageAction}" data-page="${page-1}">‹ ก่อนหน้า</button>`;
+    for(let i=0;i<pages;i++){
+      btns+=`<button class="btn btn-sm ${i===page?'btn-primary':'btn-outline'}" data-action="${pageAction}" data-page="${i}">${i+1}</button>`;
+    }
+    if(page<pages-1) btns+=`<button class="btn btn-sm btn-outline" data-action="${pageAction}" data-page="${page+1}">ถัดไป ›</button>`;
+    return `<div style="display:flex;gap:4px;justify-content:center;padding:12px 8px;flex-wrap:wrap">${btns}</div>`;
+  };
+
+  // ── tab: ใบเบิกที่จ่ายแล้ว ──
+  const issuedPage=S._retIssuedPage||0;
+  const issuedSlice=myIssued.slice(issuedPage*PER,(issuedPage+1)*PER);
+  const issuedContent=tab!=='issued'?'':`<div style="padding:12px 16px 6px">
+    <div class="info-box info-blue" style="margin-bottom:12px;font-size:12px">
+      💡 กดปุ่ม <strong style="color:#c2410c">🔄 แจ้งคืนสินค้า</strong> ที่ใบเบิกที่ต้องการคืน
+      — ระบบจะส่งคำขอให้ <strong>ผู้อนุมัติรับทราบ</strong> ก่อน จากนั้น <strong>สโตร์รับสินค้าคืน</strong> เพื่อเพิ่มสต็อกอัตโนมัติ
+    </div>
+    ${issuedSlice.length===0
+      ?`<div style="text-align:center;color:#9ca3af;padding:20px 0;font-size:12px">ยังไม่มีใบเบิกที่จ่ายแล้ว<br>ใบเบิกสถานะ "จ่ายแล้ว" จะปรากฏที่นี่</div>`
+      :issuedSlice.map(r=>{
+          const job=S.jobs.find(j=>j.id===r.jobId);
+          const cust=S.customers.find(c=>c.id===job?.customerId);
+          const exp=S.expanded['ret_'+r.id];
+          const pendRets=S.returns.filter(x=>x.reqId===r.id&&(x.status==='pending_return'||x.status==='approved_return'));
+          return `<div style="border:1px solid #bbf7d0;border-radius:8px;margin-bottom:8px;overflow:hidden">
+            <div class="list-item list-item-clickable" data-action="toggle-ret-req" data-id="${r.id}"
+                 style="background:#f0fdf4;padding:10px 14px">
+              <div style="flex:1;min-width:0">
+                <div class="row gap-2 items-center" style="flex-wrap:wrap">
+                  <span class="font-mono font-bold" style="font-size:13px">${esc(r.id)}</span>
+                  <span class="text-xs text-gray">${fmtDT(r.issuedAt||r.createdAt)}</span>
+                  ${badge('จ่ายแล้ว','bg-green')}
+                  ${pendRets.length>0?`<span class="badge bg-yellow" style="font-size:10px">⏳ รอดำเนินการ ${pendRets.length}</span>`:''}
+                </div>
+                <div class="row gap-1" style="margin-top:5px;flex-wrap:wrap">
+                  ${job?badge('📋 '+job.code,'bg-indigo'):''}
+                  ${cust?badge(cust.name,'bg-rose'):''}
+                  ${job?.machineType?badge(job.machineType,'bg-gray'):''}
+                  ${job?.machineId?badge(job.machineId,'bg-teal'):''}
+                  <span class="text-xs text-gray">${r.items.length} รายการ</span>
+                </div>
+              </div>
+              <div class="row gap-2 items-center" style="margin-left:8px">
+                <button class="btn btn-sm btn-orange" data-action="open-return" data-id="${r.id}"
+                        onclick="event.stopPropagation()" style="white-space:nowrap;font-weight:700">
+                  🔄 แจ้งคืนสินค้า
+                </button>
+                <button class="btn btn-sm btn-outline-purple" data-action="print-slip" data-id="${r.id}"
+                        onclick="event.stopPropagation()" style="white-space:nowrap">🖨️ พิมพ์</button>
+                <span style="color:#d1d5db;font-size:16px">${exp?'▲':'▼'}</span>
+              </div>
+            </div>
+            ${exp?`<div style="padding:10px 14px;background:#fff;border-top:1px solid #d1fae5">
+              <table class="tbl" style="margin:0">
+                <thead><tr><th>รายการ</th><th>รหัส</th><th class="right">จำนวน</th><th>หน่วย</th><th>ตำแหน่ง</th></tr></thead>
+                <tbody>${r.items.map(it=>{const p=S.parts.find(x=>x.id===Number(it.partId)||x.id===it.partId);
+                  return `<tr>
+                    <td>${esc(p?.name||'—')}</td>
+                    <td class="font-mono" style="font-size:11px">${esc(p?.code||'—')}</td>
+                    <td class="right">${it.qty}</td><td>${esc(p?.unit||'—')}</td>
+                    <td>${esc(it.location||'—')}</td>
+                  </tr>`;}).join('')}
+                </tbody>
+              </table>
+            </div>`:''}
+          </div>`;
+        }).join('')}
+    ${pager(myIssued.length,issuedPage,'ret-issued-page')}
+  </div>`;
+
+  // ── tab: ประวัติการแจ้งคืน ──
+  const histPage=S._retHistPage||0;
+  const histSlice=mine.slice(histPage*PER,(histPage+1)*PER);
+  const histContent=tab!=='history'?'':(histSlice.length===0
+    ?`<p style="padding:24px;text-align:center;color:#9ca3af;font-size:12px">ยังไม่มีประวัติการคืน</p>`
     :`<div style="overflow-x:auto"><table class="tbl">
       <thead><tr><th>วันที่แจ้ง</th><th>เลขใบเบิก</th><th>Job / ลูกค้า</th><th>รายการ</th><th class="right">จำนวน</th><th>เหตุผล</th><th>สถานะ</th><th>หมายเหตุ</th><th></th></tr></thead>
-      <tbody>${mine.map(rt=>{
+      <tbody>${histSlice.map(rt=>{
         const p=S.parts.find(x=>x.id===Number(rt.partId)||x.id===rt.partId);
         const req=S.reqs.find(r=>r.id===rt.reqId);
         const {jobCode,custName}=req?reqJobInfo(req):{jobCode:'—',custName:'—'};
@@ -1851,29 +1898,14 @@ function renderMyReturns(){
             <button class="btn btn-xs btn-outline-blue" data-action="print-return-slip" data-rid="${esc(rt.id)}" style="padding:2px 7px;font-size:11px">พิมพ์ใบคืน</button>
           </td>
         </tr>`;}).join('')}
-      </tbody></table></div>`;
+      </tbody></table></div>
+    ${pager(mine.length,histPage,'ret-hist-page')}`);
 
   return `<div class="section">
-    <div class="card">
-      <div class="card-hdr" style="background:${myIssued.length>0?'#f0fdf4':'#f9fafb'}">
-        <span class="card-hdr-title" style="color:${myIssued.length>0?'#15803d':'#6b7280'}">
-          📦 ใบเบิกที่จ่ายแล้ว — แจ้งคืนได้ทันที (${myIssued.length} ใบ)
-        </span>
-      </div>
-      <div style="padding:12px 16px 6px">
-        <div class="info-box info-blue" style="margin-bottom:12px;font-size:12px">
-          💡 กดปุ่ม <strong style="color:#c2410c">🔄 แจ้งคืนสินค้า</strong> ที่ใบเบิกที่ต้องการคืน
-          — ระบบจะส่งคำขอให้ <strong>ผู้อนุมัติรับทราบ</strong> ก่อน
-          จากนั้น <strong>สโตร์รับสินค้าคืน</strong> เพื่อเพิ่มสต็อกอัตโนมัติ
-        </div>
-        ${issuedCards}
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-hdr">
-        <span class="card-hdr-title">📋 ประวัติการแจ้งคืนของฉัน (${mine.length} รายการ)</span>
-      </div>
-      ${histTbl}
+    <div class="card" style="overflow:hidden">
+      ${tabBar}
+      ${issuedContent}
+      ${histContent}
     </div>
   </div>`;
 }
@@ -2743,6 +2775,9 @@ document.addEventListener('click', e => {
   // Req card expand
   if(act==='toggle-expand'||act==='toggle-req'){ const e2={...S.expanded};e2[id]=!e2[id];setState({expanded:e2}); return; }
   if(act==='toggle-ret-req'){ const e2={...S.expanded};e2['ret_'+id]=!e2['ret_'+id];setState({expanded:e2}); return; }
+  if(act==='ret-tab')        { setState({_retTab:el.dataset.val,_retIssuedPage:0,_retHistPage:0}); return; }
+  if(act==='ret-issued-page'){ setState({_retIssuedPage:Number(el.dataset.page)||0}); return; }
+  if(act==='ret-hist-page')  { setState({_retHistPage:Number(el.dataset.page)||0}); return; }
 
   // Part search actions
   if(act==='select-part'){
